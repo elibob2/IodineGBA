@@ -10,6 +10,7 @@ var debugging_branch = true;
 var debugging_register = true;
 var debugging_exception = true;
 var debugging_mode = true;
+var debugging_io = true;
 function update_log() {
 	var from = debugging_log_offset;
 	var to = Math.min(logged.length, display_amount + from);
@@ -72,6 +73,9 @@ function debug_check_log_approval(name) {
 			return debugging_pipeline;
 		case "mode":
 			return debugging_mode;
+		case "ioDebugInfo":
+		case "ioDebugInfoSpill":
+			return debugging_io;
 		case "high_reg":
 			return true;
 		default:
@@ -95,6 +99,13 @@ function debug_pipeline() {
 }
 function debug_branch(address) {
 	current_unit[1][1].push(["pipeline", "Branch To: " + outputCleanse(address)]);
+}
+function debug_io(regName, address, data, spill) {
+	current_unit[1][1].push(["ioDebugInfo", regName + " (" + outputCleanse(address) + "): " + outputCleanse(data)]);
+	var length = spill.length;
+	for (var index = 0; index < length; ++index) {
+		current_unit[1][1].push(["ioDebugInfoSpill", spill[index][0] + ": " + spill[index][1]]);
+	}
 }
 function debug_register(register, data) {
 	var type = "register";

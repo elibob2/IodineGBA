@@ -61,3 +61,12 @@ div.register {
 	padding: 0px 15px;
 	font-size: 8px;
 }
+div.ioDebugInfo {
+	background-color: rgb(220, 220, 255);
+	padding: 0px 15px;
+}
+div.ioDebugInfoSpill {
+	background-color: rgb(220, 220, 255);
+	padding: 0px 20px;
+	font-size: 8px;
+}

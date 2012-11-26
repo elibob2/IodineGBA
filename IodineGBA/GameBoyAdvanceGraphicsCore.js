@@ -554,6 +554,33 @@ GameBoyAdvanceGraphics.prototype.writeDISPCNT0 = function (data) {
 			this.renderer = this.mode5Renderer;
 			this.renderer.preprocess();
 	}
+	debug_io(
+		"DISPCNT0",
+		0x40000000,
+		data,
+		[
+			[
+				"BG Mode",
+				this.BGMode
+			],
+			[
+				"Frame Select",
+				this.frameSelect
+			],
+			[
+				"H-Blank Interval Free",
+				this.HBlankIntervalFree
+			],
+			[
+				"OBJ VRAM 1D",
+				this.VRAMOneDimensional
+			],
+			[
+				"Forced Blank",
+				this.forcedBlank
+			]
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.readDISPCNT0 = function () {
 	return (this.BGMode |
@@ -572,6 +599,41 @@ GameBoyAdvanceGraphics.prototype.writeDISPCNT1 = function (data) {
 	this.displayWindow0Flag = ((data & 0x20) == 0x20);
 	this.displayWindow1Flag = ((data & 0x40) == 0x40);
 	this.displayObjectWindowFlag = ((data & 0x80) == 0x80);
+	debug_io(
+		"DISPCNT1",
+		0x40000001,
+		data,
+		[
+			[
+				"Display BG 0",
+				this.displayBG0
+			],
+			[
+				"Display BG 1",
+				this.displayBG1
+			],
+			[
+				"Display BG 2",
+				this.displayBG2
+			],
+			[
+				"Display BG 3",
+				this.displayBG3
+			],
+			[
+				"Display BG OBJ",
+				this.displayOBJ
+			],
+			[
+				"Display Window 0",
+				this.displayWindow0Flag
+			],
+			[
+				"Display Window 1",
+				this.displayWindow1Flag
+			]
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.readDISPCNT1 = function () {
 	return ((this.displayBG0 ? 0x1 : 0) |

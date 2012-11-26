@@ -115,6 +115,10 @@ function registerGUIEvents() {
 	addEvent("click", document.getElementById("record_register"), function () {
 		debugging_register = this.checked;
 	});
+	document.getElementById("record_iospill").checked = true;
+	addEvent("click", document.getElementById("record_iospill"), function () {
+		debugging_io = this.checked;
+	});
 	document.getElementById("record_exception").checked = true;
 	addEvent("click", document.getElementById("record_exception"), function () {
 		debugging_exception = this.checked;
