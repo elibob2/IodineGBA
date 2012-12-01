@@ -70,7 +70,18 @@ GameBoyAdvanceWait.prototype.readPOSTBOOT = function () {
 }
 GameBoyAdvanceWait.prototype.writeHALTCNT = function (data) {
 	//HALT/STOP mode entrance:
-	this.systemStatus |= (data < 0x80) ? 2 : 4;
+	this.IOCore.systemStatus |= (data < 0x80) ? 2 : 4;
+	debug_io(
+		"HALTCNT",
+		0x4000301,
+		data,
+		[
+			[
+				"Mode Selected",
+				(data >= 0x80) ? "Stop" : "Halt"
+			]
+		]
+	);
 }
 GameBoyAdvanceIO.prototype.writeConfigureWRAM = function (address, data) {
 	switch (address & 0x3) {
