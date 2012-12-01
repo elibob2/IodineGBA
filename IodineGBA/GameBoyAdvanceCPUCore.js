@@ -103,10 +103,10 @@ GameBoyAdvanceCPU.prototype.branch = function (branchTo) {
 		switch (branchTo) {
 			//IRQ mode exit handling:
 			case 0x130:
-				/*TODO:
-					ldmfd  r13!,r0-r3,r12,r14  ;restore registers from SP_irq
-					subs   r15,r14,4h          ;return from IRQ (PC=LR-4, CPSR=SPSR)
-				*/
+				this.ARM.execute = 0xE8BD500F;
+				this.ARM.LDMIAW(this, this.ARM.guardMultiRegisterWrite);
+				this.ARM.execute = 0xE25EF004;
+				this.ARM.SUBS(this, this.ARM.imm);
 				break;
 			default:
 				throw(new Error("Could not handle branch to: " + branchTo.toString(16)));
@@ -166,13 +166,11 @@ GameBoyAdvanceCPU.prototype.IRQ = function () {
 		else {
 			//Exception always enter ARM mode:
 			this.enterARM();
-			/*TODO:
-				stmfd  r13!,r0-r3,r12,r14  ;save registers to SP_irq
-			*/
+			this.ARM.execute = 0xE92D500F;
+			this.ARM.STMDBW(this, this.ARM.guardMultiRegisterRead);
 			this.registers[0] = 0x4000000;
 			//Save link register:
 			this.registers[14] = 0x130;
-			debug_register(14, 0x130);
 			//Skip BIOS ROM processing:
 			this.branch(0x3FFFFFC);
 		}
@@ -193,7 +191,8 @@ GameBoyAdvanceCPU.prototype.SWI = function () {
 		this.enterARM();
 	}
 	else {
-		//TODO
+		//HLE the SWI command:
+		this.swi.execute(this.read8((this.getLR() - 2) | 0));
 	}
 }
 GameBoyAdvanceCPU.prototype.UNDEFINED = function () {

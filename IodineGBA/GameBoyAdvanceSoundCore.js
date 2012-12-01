@@ -738,6 +738,9 @@ GameBoyAdvanceSound.prototype.channel4UpdateCache = function () {
 GameBoyAdvanceSound.prototype.writeFIFOA = function (data) {
 	if (this.FIFOABuffer.length < 32) {
 		this.FIFOABuffer.push(data);
+		if (this.FIFOABuffer.length <= 16) {
+			this.IOCore.dma.soundFIFOARequest();
+		}
 	}
 }
 GameBoyAdvanceSound.prototype.checkFIFOAPendingSignal = function () {
