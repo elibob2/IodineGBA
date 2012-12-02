@@ -210,6 +210,7 @@ GameBoyAdvanceCPU.prototype.UNDEFINED = function () {
 		//Exception always enter ARM mode:
 		this.enterARM();
 	}
+	throw("Debugger caught an undefined instruction.");
 }
 GameBoyAdvanceCPU.prototype.SPSRtoCPSR = function () {
 	//Used for leaving an exception and returning to the previous state:
