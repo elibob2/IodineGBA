@@ -734,6 +734,7 @@ THUMBInstructionSet.prototype.STRBimm5 = function (parentObj) {
 	parentObj.CPUCore.write8(((parentObj.execute >> 6) & 0x1F) + parentObj.registers[(parentObj.execute >> 3) & 0x7], parentObj.registers[parentObj.execute & 0x7]);
 }
 THUMBInstructionSet.prototype.LDRBimm5 = function (parentObj) {
+	debug_opcode("LDRBimm5");
 	//Load Byte Into Register
 	var result = parentObj.CPUCore.read8(((parentObj.execute >> 6) & 0x1F) + parentObj.registers[(parentObj.execute >> 3) & 0x7]);
 	var address = parentObj.execute & 0x7;
