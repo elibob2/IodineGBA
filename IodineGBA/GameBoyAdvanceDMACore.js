@@ -232,16 +232,36 @@ GameBoyAdvanceDMA.prototype.handleDMACopy = function (dmaChannel) {
 		dmaChannel,
 		[
 			[
-				"Control",
-				control
+				"IRQ",
+				control[0]
+			],
+			[
+				"Enable Mode",
+				outputCleanse(this.DMA_ENABLE_TYPE[dmaChannel][control[1]])
+			],
+			[
+				"32/16",
+				control[2]
+			],
+			[
+				"Repeat",
+				control[3]
+			],
+			[
+				"Src Address Mode",
+				control[4]
+			],
+			[
+				"Dst Address Mode",
+				control[5]
 			],
 			[
 				"Source",
-				source
+				outputCleanse(source)
 			],
 			[
 				"Destination",
-				destination
+				outputCleanse(destination)
 			]
 		]
 	);

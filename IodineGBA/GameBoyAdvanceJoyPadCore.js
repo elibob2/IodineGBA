@@ -125,6 +125,17 @@ GameBoyAdvanceJoyPad.prototype.readKeyStatus1 = function () {
 GameBoyAdvanceJoyPad.prototype.writeKeyControl0 = function (data) {
 	this.keyInterrupt &= 0x300;
 	this.keyInterrupt |= data;
+	debug_io(
+		"KEYCNT0",
+		0x40000132,
+		data,
+		[
+			[
+				"Key Interrupt",
+				outputCleanse(this.keyInterrupt)
+			]
+		]
+	);
 }
 GameBoyAdvanceJoyPad.prototype.readKeyControl0 = function () {
 	return this.keyInterrupt & 0xFF;
@@ -134,6 +145,25 @@ GameBoyAdvanceJoyPad.prototype.writeKeyControl1 = function (data) {
 	this.keyInterrupt |= data << 8;
 	this.keyIRQType = (data > 0x7F);
 	this.keyIRQEnabled = ((data & 0x40) == 0x40);
+	debug_io(
+		"KEYCNT1",
+		0x40000133,
+		data,
+		[
+			[
+				"Key Interrupt",
+				outputCleanse(this.keyInterrupt)
+			],
+			[
+				"Key IRQ Type",
+				outputCleanse(this.keyIRQType)
+			],
+			[
+				"Key IRQ Enabled",
+				outputCleanse(this.keyIRQEnabled)
+			]
+		]
+	);
 }
 GameBoyAdvanceJoyPad.prototype.readKeyControl1 = function () {
 	return ((this.keyInterrupt >> 8) & 0xC3) | 0x3C;
