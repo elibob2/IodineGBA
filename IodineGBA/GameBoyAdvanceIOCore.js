@@ -45,12 +45,14 @@ GameBoyAdvanceIO.prototype.memoryWrite8 = function (address, data) {
 	//Byte Write:
 	this.wait.width = 8;
 	this.memoryWrite(address >>> 0, data & 0xFF, 0);
+	debug_memoryWrite(address, data, 8);
 }
 GameBoyAdvanceIO.prototype.memoryWrite16 = function (address, data) {
 	//Half-Word Write:
 	this.wait.width = 16;
 	this.memoryWrite(address >>>= 0, data & 0xFF, 0);
 	this.memoryWrite(address + 1, (data >> 8) & 0xFF, 1);
+	debug_memoryWrite(address, data, 16);
 }
 GameBoyAdvanceIO.prototype.memoryWrite32 = function (address, data) {
 	//Word Write:
@@ -59,6 +61,7 @@ GameBoyAdvanceIO.prototype.memoryWrite32 = function (address, data) {
 	this.memoryWrite(address + 1, (data >> 8) & 0xFF, 1);
 	this.memoryWrite(address + 2, (data >> 16) & 0xFF, 2);
 	this.memoryWrite(address + 3, data >>> 24, 3);
+	debug_memoryWrite(address, data, 32);
 }
 GameBoyAdvanceIO.prototype.memoryWrite = function (address, data, busReqNumber) {
 	this.memoryWriter[address >>> 24](this, address, data, busReqNumber);
@@ -66,13 +69,16 @@ GameBoyAdvanceIO.prototype.memoryWrite = function (address, data, busReqNumber) 
 GameBoyAdvanceIO.prototype.memoryRead8 = function (address) {
 	//Byte Write:
 	this.wait.width = 8;
-	return this.memoryRead(address >>> 0, 0);
+	var data8 = this.memoryRead(address >>> 0, 0);
+	debug_memoryRead(address, data8, 32);
+	return data8;
 }
 GameBoyAdvanceIO.prototype.memoryRead16 = function (address) {
 	//Half-Word Write:
 	this.wait.width = 16;
 	var data16 = this.memoryRead(address >>>= 0, 0);
 	data16 |= this.memoryRead(address + 1, 1) << 8;
+	debug_memoryRead(address, data16, 16);
 	return data16;
 }
 GameBoyAdvanceIO.prototype.memoryRead32 = function (address) {
@@ -82,6 +88,7 @@ GameBoyAdvanceIO.prototype.memoryRead32 = function (address) {
 	data32 |= this.memoryRead(address + 1, 1) << 8;
 	data32 |= this.memoryRead(address + 2, 2) << 16;
 	data32 |= this.memoryRead(address + 3, 3) << 24;
+	debug_memoryRead(address, data32, 32);
 	return data32;
 }
 GameBoyAdvanceIO.prototype.memoryRead = function (address, busReqNumber) {

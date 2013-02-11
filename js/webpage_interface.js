@@ -173,6 +173,12 @@ function keyDown(event) {
 				}
 				catch (error) { }
 			}
+            else if (74 == keyCode) {
+                update_log_decrement();
+            }
+            else if (76 == keyCode) {
+                update_log_increment()
+            }
 		}
 	}
 }

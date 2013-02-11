@@ -488,7 +488,6 @@ GameBoyAdvanceCPU.prototype.write32 = function (address, data) {
 	this.IOCore.memoryWrite32(address, data);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryWrite(address, data, 32);
 }
 GameBoyAdvanceCPU.prototype.write16 = function (address, data) {
 	//Updating the address bus away from PC fetch:
@@ -496,7 +495,6 @@ GameBoyAdvanceCPU.prototype.write16 = function (address, data) {
 	this.IOCore.memoryWrite16(address, data);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryWrite(address, data, 16);
 }
 GameBoyAdvanceCPU.prototype.write8 = function (address, data) {
 	//Updating the address bus away from PC fetch:
@@ -504,7 +502,6 @@ GameBoyAdvanceCPU.prototype.write8 = function (address, data) {
 	this.IOCore.memoryWrite8(address, data);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryWrite(address, data, 8);
 }
 GameBoyAdvanceCPU.prototype.read32 = function (address) {
 	//Updating the address bus away from PC fetch:
@@ -512,7 +509,6 @@ GameBoyAdvanceCPU.prototype.read32 = function (address) {
 	var data = this.IOCore.memoryRead32(address);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryRead(address, data, 32);
 	return data;
 }
 GameBoyAdvanceCPU.prototype.read16 = function (address) {
@@ -521,7 +517,6 @@ GameBoyAdvanceCPU.prototype.read16 = function (address) {
 	var data = this.IOCore.memoryRead16(address);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryRead(address, data, 16);
 	return data;
 }
 GameBoyAdvanceCPU.prototype.read8 = function (address) {
@@ -530,6 +525,5 @@ GameBoyAdvanceCPU.prototype.read8 = function (address) {
 	var data = this.IOCore.memoryRead8(address);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	debug_memoryRead(address, data, 8);
 	return data;
 }

@@ -1246,21 +1246,81 @@ GameBoyAdvanceGraphics.prototype.writeBG2PA0 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dx = (this.BG2dx & 0xFF00) | data;
 	this.actualBG2dx = (this.BG2dx << 16) / 0x1000000;
+	debug_io(
+		"BG2PA0",
+		0x40000020,
+		data,
+		[
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx)",
+				outputCleanse(this.BG2dx)
+			],
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+				outputCleanse(this.actualBG2dx)
+			],
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PA1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dx = (data << 8) | (this.BG2dx & 0xFF);
 	this.actualBG2dx = (this.BG2dx << 16) / 0x1000000;
+	debug_io(
+		"BG2PA1",
+		0x40000021,
+		data,
+		[
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx)",
+				outputCleanse(this.BG2dx)
+			],
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+				outputCleanse(this.actualBG2dx)
+			],
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PB0 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dmx = (this.BG2dmx & 0xFF00) | data;
 	this.actualBG2dmx = (this.BG2dmx << 16) / 0x1000000;
+	debug_io(
+		"BG2PB0",
+		0x40000022,
+		data,
+		[
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx)",
+				outputCleanse(this.BG2dmx)
+			],
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+				outputCleanse(this.actualBG2dmx)
+			],
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PB1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dmx = (data << 8) | (this.BG2dmx & 0xFF);
 	this.actualBG2dmx = (this.BG2dmx << 16) / 0x1000000;
+	debug_io(
+		"BG2PB1",
+		0x40000023,
+		data,
+		[
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx)",
+				outputCleanse(this.BG2dmx)
+			],
+			[
+				"BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+				outputCleanse(this.actualBG2dmx)
+			],
+		]
+	);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PC0 = function (data) {
 	this.midScanLineJIT();
