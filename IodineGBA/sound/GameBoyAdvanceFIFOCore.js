@@ -25,7 +25,7 @@ GameBoyAdvanceFIFO.prototype.initializeFIFO = function () {
 GameBoyAdvanceFIFO.prototype.push = function (sample) {
 	this.buffer[(this.position + this.count) & 0x1F] = sample;
 	this.position = (this.position + (this.count >> 5)) & 0x1F;
-	this.count = this.count + 1 - (this.count >> 5);
+	this.count += 1 - (this.count >> 5);
 }
 GameBoyAdvanceFIFO.prototype.shift = function () {
 	var output = 0;
@@ -37,5 +37,5 @@ GameBoyAdvanceFIFO.prototype.shift = function () {
 	return (output << 24) >> 22;
 }
 GameBoyAdvanceFIFO.prototype.requestingDMA = function () {
-	return (this.count <= 0x10);
+    return (this.count <= 0x10);
 }

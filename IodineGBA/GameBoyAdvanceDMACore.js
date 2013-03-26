@@ -262,7 +262,19 @@ GameBoyAdvanceDMA.prototype.handleDMACopy = function (dmaChannel) {
 			[
 				"Destination",
 				outputCleanse(destination)
-			]
+			],
+            [
+                "Word Count",
+                this.wordCountShadow[dmaChannel]
+            ],
+            [
+                "Channel Pending Flags",
+                this.pending
+            ],
+            [
+                "Channel Enable Flags",
+                this.enabled
+            ]
 		]
 	);
 	//Transfer Data:
