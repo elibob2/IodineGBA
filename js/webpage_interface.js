@@ -95,6 +95,11 @@ function registerGUIEvents() {
 	addEvent("change", document.getElementById("display_amount"), function () {
 		display_amount = this.value;
 	});
+    document.getElementById("log_mode").value = "CPU";
+	addEvent("change", document.getElementById("log_mode"), function () {
+             log_mode = this.value;
+             debugging_log_offset = 0;
+    });
 	document.getElementById("record_enable").checked = true;
 	addEvent("click", document.getElementById("record_enable"), function () {
 		debugging_enabled = this.checked;

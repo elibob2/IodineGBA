@@ -83,7 +83,11 @@
 						<label>Record Mode Switches: </label><input type="checkbox" checked="checked" id="record_mode">
 						<label>Record IO Spills: </label><input type="checkbox" checked="checked" id="record_iospill">
 						<label>Record Registers: </label><input type="checkbox" checked="checked" id="record_register">
-						<select id="display_amount">
+                        <select id="log_mode">
+                                <option value="CPU">CPU</option>
+                                <option value="GFX">GFX</option>
+                        </select>
+                        <select id="display_amount">
 							<option value="100">100</option>
 							<option value="150">150</option>
 							<option value="200">200</option>
@@ -106,6 +110,8 @@
 		<div id="main">
 			<canvas id="emulator_target" width="240px" height="160px"></canvas>
 			<div id="debug_log">
+			</div>
+            <div id="gfx_log">
 			</div>
 		</div>
 	</body>

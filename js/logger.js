@@ -11,8 +11,23 @@ var debugging_register = true;
 var debugging_exception = true;
 var debugging_mode = true;
 var debugging_io = true;
+var gfx_log = [];
+var log_mode = "CPU";
 function update_log() {
-	var from = debugging_log_offset;
+	switch (log_mode) {
+        case "GFX":
+            document.getElementById("gfx_log").setAttribute("style", ";display: block;");
+            document.getElementById("debug_log").setAttribute("style", ";display: none;");
+            update_gfx_log();
+            break;
+        default:
+            document.getElementById("debug_log").setAttribute("style", ";display: block;");
+            document.getElementById("gfx_log").setAttribute("style", ";display: none;");
+            update_cpu_log();
+    }
+}
+function update_cpu_log() {
+    var from = debugging_log_offset;
 	var to = Math.min(logged.length, display_amount + from);
 	var log_handle = document.getElementById("debug_log");
 	while (log_handle.hasChildNodes()) {
@@ -38,6 +53,22 @@ function update_log() {
 			}
 		}
 		unit_handle.appendChild(unit2_handle);
+		log_handle.appendChild(unit_handle);
+	}
+}
+function update_gfx_log() {
+    var from = debugging_log_offset;
+	var to = Math.min(gfx_log.length, display_amount + from);
+	var log_handle = document.getElementById("gfx_log");
+	while (log_handle.hasChildNodes()) {
+		log_handle.removeChild(log_handle.lastChild);
+	}
+	for (; from < to; ++from) {
+		var unit_handle = document.createElement("div");
+        var unit = document.createElement("div");
+        unit.appendChild(document.createTextNode(gfx_log[from][0] + ": "));
+        unit.appendChild(document.createTextNode(gfx_log[from][1]));
+		log_handle.appendChild(unit);
 		log_handle.appendChild(unit_handle);
 	}
 }
@@ -154,4 +185,7 @@ function debug_end_unit() {
 }
 function outputCleanse(data) {
 	return (data >>> 0).toString(16);
+}
+function gfx_debug(regName, data) {
+	gfx_log.push([regName, data]);
 }

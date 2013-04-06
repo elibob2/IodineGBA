@@ -80,14 +80,14 @@ GameBoyAdvanceGraphics.prototype.initializeIO = function () {
 	this.BG2YCoord = 0;
 	this.BG3XCoord = 0;
 	this.BG3YCoord = 0;
-	this.BG2dx = 0;
+	this.BG2dx = 100;
 	this.BG2dmx = 0;
 	this.BG2dy = 0;
-	this.BG2dmy = 0;
-	this.actualBG2dx = 0;
+	this.BG2dmy = 100;
+	this.actualBG2dx = 1;
 	this.actualBG2dmx = 0;
 	this.actualBG2dy = 0;
-	this.actualBG2dmy = 0;
+	this.actualBG2dmy = 1;
 	this.BG3dx = 0;
 	this.BG3dmx = 0;
 	this.BG3dy = 0;
@@ -349,6 +349,7 @@ GameBoyAdvanceGraphics.prototype.graphicsJITVBlank = function () {
 	//JIT the graphics to v-blank framing:
 	this.totalLinesPassed += this.queuedScanLines;
 	this.graphicsJITScanlineGroup();
+    gfx_debug("Frame Draw", "VBlank Sync");
 }
 GameBoyAdvanceGraphics.prototype.graphicsJITScanlineGroup = function () {
 	//Normal rendering JIT, where we try to do groups of scanlines at once:
@@ -395,6 +396,7 @@ GameBoyAdvanceGraphics.prototype.OAMLockedCycles = function () {
 GameBoyAdvanceGraphics.prototype.midScanLineJIT = function () {
 	//No mid-scanline JIT for now, instead just do per-scanline:
 	this.graphicsJIT();
+    gfx_debug("Frame Draw", "State Change Sync");
 }
 GameBoyAdvanceGraphics.prototype.compositorPreprocess = function () { 
 	this.compositeLayers = (this.WINEffectsOutside) ? this.compositeLayersWithEffects : this.compositeLayersNormal;
@@ -508,14 +510,14 @@ GameBoyAdvanceGraphics.prototype.copyLineToFrameBuffer = function (line) {
 	var offsetStart = line * 240;
 	var position = 0;
 	if (!this.greenSwap) {
-		for (var offsetEnd = offsetStart + 240; position < 240; ++offsetStart) {
-			this.frameBuffer[offsetStart] = this.lineBuffer[position++];
+		while (position < 240) {
+			this.frameBuffer[offsetStart++] = this.lineBuffer[position++];
 		}
 	}
 	else {
 		var pixel0 = 0;
 		var pixel1 = 0;
-		for (var offsetEnd = offsetStart + 240; position < 240;) {
+		while (position < 240) {
 			pixel0 = this.lineBuffer[position++];
 			pixel1 = this.lineBuffer[position++];
 			this.frameBuffer[offsetStart++] = (pixel0 & 0x7C1F) | (pixel1 & 0x3E0);
@@ -581,6 +583,11 @@ GameBoyAdvanceGraphics.prototype.writeDISPCNT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG Mode", this.BGMode);
+    gfx_debug("Frame Select", this.frameSelect);
+    gfx_debug("H-Blank Interval Free", this.HBlankIntervalFree);
+    gfx_debug("OBJ VRAM 1D", this.VRAMOneDimensional);
+    gfx_debug("Forced Blank", this.forcedBlank);
 }
 GameBoyAdvanceGraphics.prototype.readDISPCNT0 = function () {
 	return (this.BGMode |
@@ -634,6 +641,13 @@ GameBoyAdvanceGraphics.prototype.writeDISPCNT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("Display BG 0", this.displayBG0);
+    gfx_debug("Display BG 1", this.displayBG1);
+    gfx_debug("Display BG 2", this.displayBG2);
+    gfx_debug("Display BG 3", this.displayBG3);
+    gfx_debug("Display BG OBJ", this.displayOBJ);
+    gfx_debug("Display Window 0", this.displayWindow0Flag);
+    gfx_debug("Display Window 1", this.displayWindow1Flag);
 }
 GameBoyAdvanceGraphics.prototype.readDISPCNT1 = function () {
 	return ((this.displayBG0 ? 0x1 : 0) |
@@ -659,6 +673,7 @@ GameBoyAdvanceGraphics.prototype.writeGreenSwap = function (data) {
 			]
 		]
 	);
+    gfx_debug("Green Swap", this.greenSwap);
 }
 GameBoyAdvanceGraphics.prototype.readGreenSwap = function () {
 	return (this.greenSwap ? 0x1 : 0);
@@ -690,6 +705,9 @@ GameBoyAdvanceGraphics.prototype.writeDISPSTAT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("IRQ VBlank", this.IRQVBlank);
+    gfx_debug("IRQ HBlank", this.IRQHBlank);
+    gfx_debug("IRQ VCounter", this.IRQVCounter);
 }
 GameBoyAdvanceGraphics.prototype.readDISPSTAT0 = function () {
 	return ((this.inVBlank ? 0x1 : 0) |
@@ -714,6 +732,7 @@ GameBoyAdvanceGraphics.prototype.writeDISPSTAT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("VCounter", this.VCounter);
 }
 GameBoyAdvanceGraphics.prototype.readDISPSTAT1 = function () {
 	return this.VCounter;
@@ -752,6 +771,10 @@ GameBoyAdvanceGraphics.prototype.writeBG0CNT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 Priority", this.BG0Priority);
+    gfx_debug("BG0 Character Base Block", this.BG0CharacterBaseBlock);
+    gfx_debug("BG0 Mosaic", this.BG0Mosaic);
+    gfx_debug("BG0 Palette-256", this.BG0Palette256);
 }
 GameBoyAdvanceGraphics.prototype.readBG0CNT0 = function () {
 	return (this.BG0Priority |
@@ -784,6 +807,9 @@ GameBoyAdvanceGraphics.prototype.writeBG0CNT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 Screen Base Block", this.BG0ScreenBaseBlock);
+    gfx_debug("BG0 Display Overflow", this.BG0DisplayOverflow);
+    gfx_debug("BG0 Screen Size", this.BG0ScreenSize);
 }
 GameBoyAdvanceGraphics.prototype.readBG0CNT1 = function () {
 	return (this.BG0ScreenBaseBlock |
@@ -821,6 +847,10 @@ GameBoyAdvanceGraphics.prototype.writeBG1CNT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 Priority", this.BG1Priority);
+    gfx_debug("BG1 Character Base Block", this.BG1CharacterBaseBlock);
+    gfx_debug("BG1 Mosaic", this.BG1Mosaic);
+    gfx_debug("BG1 Palette-256", this.BG1Palette256);
 }
 GameBoyAdvanceGraphics.prototype.readBG1CNT0 = function () {
 	return (this.BG1Priority |
@@ -853,6 +883,9 @@ GameBoyAdvanceGraphics.prototype.writeBG1CNT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 Screen Base Block", this.BG1ScreenBaseBlock);
+    gfx_debug("BG1 Display Overflow", this.BG1DisplayOverflow);
+    gfx_debug("BG1 Screen Size", this.BG1ScreenSize);
 }
 GameBoyAdvanceGraphics.prototype.readBG1CNT1 = function () {
 	return (this.BG1ScreenBaseBlock |
@@ -892,6 +925,10 @@ GameBoyAdvanceGraphics.prototype.writeBG2CNT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 Priority", this.BG2Priority);
+    gfx_debug("BG2 Character Base Block", this.BG2CharacterBaseBlock);
+    gfx_debug("BG2 Mosaic", this.BG2Mosaic);
+    gfx_debug("BG2 Palette-256", this.BG2Palette256);
 }
 GameBoyAdvanceGraphics.prototype.readBG2CNT0 = function () {
 	return (this.BG2Priority |
@@ -925,6 +962,9 @@ GameBoyAdvanceGraphics.prototype.writeBG2CNT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 Screen Base Block", this.BG2ScreenBaseBlock);
+    gfx_debug("BG2 Display Overflow", this.BG2DisplayOverflow);
+    gfx_debug("BG2 Screen Size", this.BG2ScreenSize);
 }
 GameBoyAdvanceGraphics.prototype.readBG2CNT1 = function () {
 	return (this.BG2ScreenBaseBlock |
@@ -963,6 +1003,10 @@ GameBoyAdvanceGraphics.prototype.writeBG3CNT0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 Priority", this.BG3Priority);
+    gfx_debug("BG3 Character Base Block", this.BG3CharacterBaseBlock);
+    gfx_debug("BG3 Mosaic", this.BG3Mosaic);
+    gfx_debug("BG3 Palette-256", this.BG3Palette256);
 }
 GameBoyAdvanceGraphics.prototype.readBG3CNT0 = function () {
 	return (this.BG3Priority |
@@ -996,6 +1040,9 @@ GameBoyAdvanceGraphics.prototype.writeBG3CNT1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 Screen Base Block", this.BG3ScreenBaseBlock);
+    gfx_debug("BG3 Display Overflow", this.BG3DisplayOverflow);
+    gfx_debug("BG3 Screen Size", this.BG3ScreenSize);
 }
 GameBoyAdvanceGraphics.prototype.readBG3CNT1 = function () {
 	return (this.BG3ScreenBaseBlock |
@@ -1016,6 +1063,7 @@ GameBoyAdvanceGraphics.prototype.writeBG0HOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 X Coordinate", this.BG0XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG0HOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1031,6 +1079,7 @@ GameBoyAdvanceGraphics.prototype.writeBG0HOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 X Coordinate", this.BG0XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG0VOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1046,6 +1095,7 @@ GameBoyAdvanceGraphics.prototype.writeBG0VOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 Y Coordinate", this.BG0YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG0VOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1061,6 +1111,7 @@ GameBoyAdvanceGraphics.prototype.writeBG0VOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG0 Y Coordinate", this.BG0YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG1HOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1076,6 +1127,7 @@ GameBoyAdvanceGraphics.prototype.writeBG1HOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 X Coordinate", this.BG1XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG1HOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1091,6 +1143,7 @@ GameBoyAdvanceGraphics.prototype.writeBG1HOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 X Coordinate", this.BG1XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG1VOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1106,6 +1159,7 @@ GameBoyAdvanceGraphics.prototype.writeBG1VOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 Y Coordinate", this.BG1YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG1VOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1121,6 +1175,7 @@ GameBoyAdvanceGraphics.prototype.writeBG1VOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG1 Y Coordinate", this.BG1YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2HOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1136,6 +1191,7 @@ GameBoyAdvanceGraphics.prototype.writeBG2HOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 X Coordinate", this.BG2XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2HOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1151,6 +1207,7 @@ GameBoyAdvanceGraphics.prototype.writeBG2HOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 X Coordinate", this.BG2XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2VOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1166,6 +1223,7 @@ GameBoyAdvanceGraphics.prototype.writeBG2VOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 Y Coordinate", this.BG2YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2VOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1181,6 +1239,7 @@ GameBoyAdvanceGraphics.prototype.writeBG2VOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG2 Y Coordinate", this.BG2YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3HOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1196,6 +1255,7 @@ GameBoyAdvanceGraphics.prototype.writeBG3HOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 X Coordinate", this.BG3XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3HOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1211,6 +1271,7 @@ GameBoyAdvanceGraphics.prototype.writeBG3HOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 X Coordinate", this.BG3XCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3VOFS0 = function (data) {
 	this.midScanLineJIT();
@@ -1226,6 +1287,7 @@ GameBoyAdvanceGraphics.prototype.writeBG3VOFS0 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 Y Coordinate", this.BG3YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3VOFS1 = function (data) {
 	this.midScanLineJIT();
@@ -1241,6 +1303,7 @@ GameBoyAdvanceGraphics.prototype.writeBG3VOFS1 = function (data) {
 			]
 		]
 	);
+    gfx_debug("BG3 Y Coordinate", this.BG3YCoord);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PA0 = function (data) {
 	this.midScanLineJIT();
@@ -1261,6 +1324,8 @@ GameBoyAdvanceGraphics.prototype.writeBG2PA0 = function (data) {
 			],
 		]
 	);
+    gfx_debug("BG2 Rotation/Scaling Parameter A (alias dx)", this.BG2dx);
+    gfx_debug("BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]", this.actualBG2dx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PA1 = function (data) {
 	this.midScanLineJIT();
@@ -1281,6 +1346,8 @@ GameBoyAdvanceGraphics.prototype.writeBG2PA1 = function (data) {
 			],
 		]
 	);
+    gfx_debug("BG2 Rotation/Scaling Parameter A (alias dx)", this.BG2dx);
+    gfx_debug("BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]", this.actualBG2dx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PB0 = function (data) {
 	this.midScanLineJIT();
@@ -1292,15 +1359,17 @@ GameBoyAdvanceGraphics.prototype.writeBG2PB0 = function (data) {
 		data,
 		[
 			[
-				"BG2 Rotation/Scaling Parameter A (alias dx)",
+				"BG2 Rotation/Scaling Parameter B (alias dmx)",
 				outputCleanse(this.BG2dmx)
 			],
 			[
-				"BG2 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+				"BG2 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]",
 				outputCleanse(this.actualBG2dmx)
 			],
 		]
 	);
+    gfx_debug("BG2 Rotation/Scaling Parameter B (alias dmx)", this.BG2dmx);
+    gfx_debug("BG2 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]", this.actualBG2dmx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PB1 = function (data) {
 	this.midScanLineJIT();
@@ -1326,61 +1395,265 @@ GameBoyAdvanceGraphics.prototype.writeBG2PC0 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dy = (this.BG2dy & 0xFF00) | data;
 	this.actualBG2dy = (this.BG2dy << 16) / 0x1000000;
+    debug_io(
+             "BG2PC0",
+             0x40000024,
+             data,
+             [
+              [
+               "BG2 Rotation/Scaling Parameter C (alias dy)",
+               outputCleanse(this.BG2dy)
+               ],
+              [
+               "BG2 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG2dy)
+               ],
+              ]
+             );
+    gfx_debug("BG2 Rotation/Scaling Parameter C (alias dy)", this.BG2dy);
+    gfx_debug("BG2 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]", this.actualBG2dy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PC1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dy = (data << 8) | (this.BG2dy & 0xFF);
 	this.actualBG2dy = (this.BG2dy << 16) / 0x1000000;
+    debug_io(
+             "BG2PC1",
+             0x40000025,
+             data,
+             [
+              [
+               "BG2 Rotation/Scaling Parameter C (alias dy)",
+               outputCleanse(this.BG2dy)
+               ],
+              [
+               "BG2 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG2dy)
+               ],
+              ]
+             );
+    gfx_debug("BG2 Rotation/Scaling Parameter C (alias dy)", this.BG2dy);
+    gfx_debug("BG2 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]", this.actualBG2dy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PD0 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dmy = (this.BG2dmx & 0xFF00) | data;
 	this.actualBG2dmy = (this.BG2dmy << 16) / 0x1000000;
+    debug_io(
+             "BG2PD0",
+             0x40000026,
+             data,
+             [
+              [
+               "BG2 Rotation/Scaling Parameter D (alias dmy)",
+               outputCleanse(this.BG2dmy)
+               ],
+              [
+               "BG2 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG2dmy)
+               ],
+              ]
+             );
+    gfx_debug("BG2 Rotation/Scaling Parameter D (alias dmy)", this.BG2dmy);
+    gfx_debug("BG2 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]", this.actualBG2dmy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2PD1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2dmy = (data << 8) | (this.BG2dmx & 0xFF);
 	this.actualBG2dmy = (this.BG2dmy << 16) / 0x1000000;
+    debug_io(
+             "BG2PD1",
+             0x40000027,
+             data,
+             [
+              [
+               "BG2 Rotation/Scaling Parameter D (alias dmy)",
+               outputCleanse(this.BG2dmy)
+               ],
+              [
+               "BG2 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG2dmy)
+               ],
+              ]
+             );
+    gfx_debug("BG2 Rotation/Scaling Parameter D (alias dmy)", this.BG2dmy);
+    gfx_debug("BG2 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]", this.actualBG2dmy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PA0 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dx = (this.BG3dx & 0xFF00) | data;
 	this.actualBG3dx = (this.BG3dx << 16) / 0x1000000;
+    debug_io(
+             "BG3PA0",
+             0x40000028,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter A (alias dx)",
+               outputCleanse(this.BG3dx)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dx)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter A (alias dx)", this.BG3dx);
+    gfx_debug("BG3 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]", this.actualBG3dx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PA1 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dx = (data << 8) | (this.BG3dx & 0xFF);
 	this.actualBG3dx = (this.BG3dx << 16) / 0x1000000;
+    debug_io(
+             "BG3PA1",
+             0x40000029,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter A (alias dx)",
+               outputCleanse(this.BG3dx)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dx)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter A (alias dx)", this.BG3dx);
+    gfx_debug("BG3 Rotation/Scaling Parameter A (alias dx) [INTERNAL ADJUSTED]", this.actualBG3dx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PB0 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dmx = (this.BG3dmx & 0xFF00) | data;
 	this.actualBG3dmx = (this.BG3dmx << 16) / 0x1000000;
+    debug_io(
+             "BG3PB0",
+             0x4000002A,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter B (alias dmx)",
+               outputCleanse(this.BG3dmx)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dmx)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter B (alias dmx)", this.BG3dmx);
+    gfx_debug("BG3 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]", this.actualBG3dmx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PB1 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dmx = (data << 8) | (this.BG3dmx & 0xFF);
 	this.actualBG3dmx = (this.BG3dmx << 16) / 0x1000000;
+    debug_io(
+             "BG3PB1",
+             0x4000002B,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter B (alias dmx)",
+               outputCleanse(this.BG3dmx)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dmx)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter B (alias dmx)", this.BG3dmx);
+    gfx_debug("BG3 Rotation/Scaling Parameter B (alias dmx) [INTERNAL ADJUSTED]", this.actualBG3dmx);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PC0 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dy = (this.BG3dy & 0xFF00) | data;
 	this.actualBG3dy = (this.BG3dy << 16) / 0x1000000;
+    debug_io(
+             "BG3PC0",
+             0x4000002C,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter C (alias dy)",
+               outputCleanse(this.BG3dy)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dy)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter C (alias dy)", this.BG3dy);
+    gfx_debug("BG3 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]", this.actualBG3dy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PC1 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dy = (data << 8) | (this.BG3dy & 0xFF);
 	this.actualBG3dy = (this.BG3dy << 16) / 0x1000000;
+    debug_io(
+             "BG3PC1",
+             0x4000002D,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter C (alias dy)",
+               outputCleanse(this.BG3dy)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dy)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter C (alias dy)", this.BG3dy);
+    gfx_debug("BG3 Rotation/Scaling Parameter C (alias dy) [INTERNAL ADJUSTED]", this.actualBG3dy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PD0 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dmy = (this.BG3dmx & 0xFF00) | data;
 	this.actualBG3dmy = (this.BG3dmy << 16) / 0x1000000;
+    debug_io(
+             "BG3PD0",
+             0x4000002E,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter D (alias dmy)",
+               outputCleanse(this.BG3dmy)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dmy)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter D (alias dmy)", this.BG3dmy);
+    gfx_debug("BG3 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]", this.actualBG3dmy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG3PD1 = function (data) {
 	this.midScanLineJIT();
 	this.BG3dmy = (data << 8) | (this.BG3dmx & 0xFF);
 	this.actualBG3dmy = (this.BG3dmy << 16) / 0x1000000;
+    debug_io(
+             "BG3PD1",
+             0x4000002F,
+             data,
+             [
+              [
+               "BG3 Rotation/Scaling Parameter D (alias dmy)",
+               outputCleanse(this.BG3dmy)
+               ],
+              [
+               "BG3 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]",
+               outputCleanse(this.actualBG3dmy)
+               ],
+              ]
+             );
+    gfx_debug("BG3 Rotation/Scaling Parameter D (alias dmy)", this.BG3dmy);
+    gfx_debug("BG3 Rotation/Scaling Parameter D (alias dmy) [INTERNAL ADJUSTED]", this.actualBG3dmy);
 }
 GameBoyAdvanceGraphics.prototype.writeBG2X_L0 = function (data) {
 	this.midScanLineJIT();
@@ -1620,6 +1893,7 @@ GameBoyAdvanceGraphics.prototype.writeBLDY = function (data) {
 GameBoyAdvanceGraphics.prototype.writeVRAM = function (address, data) {
 	this.midScanLineJIT();
 	this.VRAM[address] = data;
+    gfx_debug("VRAM", "0x" + data.toString(16) + " @ 0x" + address.toString(16));
 }
 GameBoyAdvanceGraphics.prototype.readVRAM = function (address) {
 	return this.VRAM[address];
@@ -1672,6 +1946,7 @@ GameBoyAdvanceGraphics.prototype.writeOAM = function (address, data) {
 			this.OBJMatrixParameters[address >> 5][(address >> 3) & 0x3] = (this.OBJMatrixParametersRaw[address >> 5][(address >> 3) & 0x3] << 16) / 0x1000000;
 	}
 	this.OAMRAM[address] = data;
+    gfx_debug("OAM", "0x" + data.toString(16) + " @ 0x" + address.toString(16));
 }
 GameBoyAdvanceGraphics.prototype.readOAM = function (address) {
 	return this.OAMRAM[address];
@@ -1699,6 +1974,7 @@ GameBoyAdvanceGraphics.prototype.writePalette = function (address, data) {
 	else {
 		this.paletteOBJ16[(address >> 4) & 0xF][address & 0xF] = palette;
 	}
+    gfx_debug("Palette", "0x" + data.toString(16) + " @ 0x" + address.toString(16));
 }
 GameBoyAdvanceGraphics.prototype.readPalette = function (address) {
 	return this.paletteRAM[address];
