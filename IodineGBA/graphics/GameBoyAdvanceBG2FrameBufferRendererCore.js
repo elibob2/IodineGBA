@@ -62,7 +62,9 @@ GameBoyAdvanceBG2FrameBufferRenderer.prototype.renderScanLine = function (line) 
 		x = pa + this.pb;
 		y = pc + this.pd;
 		//Fetch pixel:
-		this.scratchBuffer[position] = this.priorityFlag | this.fetchPixel(x | 0, y | 0);
+        var pixel =this.fetchPixel(x | 0, y | 0);
+        //gfx_debug("Output: ", "rgb(" + (((pixel >> 10) & 0x1F) << 3) + ", " + (((pixel >> 5) & 0x1F) << 3) + ", " + ((pixel & 0x1F) << 3) + ")");
+		this.scratchBuffer[position] = this.priorityFlag | pixel;
 		//Increment PA & PC for each X:
 		pa += this.gfx.actualBG2dx;
 		pc += this.gfx.actualBG2dy;
@@ -98,7 +100,8 @@ GameBoyAdvanceBG2FrameBufferRenderer.prototype.fetchMode3Pixel = function (x, y)
 }
 GameBoyAdvanceBG2FrameBufferRenderer.prototype.fetchMode4Pixel = function (x, y) {
     //Output pixel:
-	if (x > 239 || y > 159) {
+	gfx_debug("M4 Render Coord","x: " + x + ", y: " + y);
+    if (x > 239 || y > 159) {
         return this.gfx.transparency;
 	}
 	return this.gfx.palette256[this.gfx.VRAM[this.gfx.frameSelect + (y * 240) + x]];

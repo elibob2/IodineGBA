@@ -150,7 +150,7 @@ GameBoyAdvanceGraphics.prototype.initializeIO = function () {
 	this.VRAM = getUint8Array(0x18000);
 	this.OAMRAM = getUint8Array(0x400);
 	this.lineBuffer = getInt32Array(240);
-	this.frameBuffer = getInt32Array(38400);
+	this.frameBuffer = this.emulatorCore.frameBuffer;
 	this.LCDTicks = 0;
 	this.totalLinesPassed = 0;
 	this.queuedScanLines = 0;
@@ -246,9 +246,9 @@ GameBoyAdvanceGraphics.prototype.clockLCDState = function () {
 		//Handle switching in/out of vblank:
 		switch (this.currentScanLine) {
 			case 159:
-				this.updateVBlankStart();
-				this.currentScanLine = 160;							//Increment to the next scan line (Start of v-blank).
 				this.incrementScanLineQueue();
+                this.updateVBlankStart();
+				this.currentScanLine = 160;							//Increment to the next scan line (Start of v-blank).
 				break;
 			case 161:
 				this.IOCore.dma.gfxDisplaySyncKillRequest();		//Display Sync. DMA stop.
@@ -339,6 +339,7 @@ GameBoyAdvanceGraphics.prototype.updateVBlankStart = function () {
 		this.emulatorCore.prepareFrame();
 	}
 	this.bg2MatrixRenderer.resetReferenceCounters();
+    this.bg2FrameBufferRenderer.resetReferenceCounters();
 	this.bg3MatrixRenderer.resetReferenceCounters();
 }
 GameBoyAdvanceGraphics.prototype.graphicsJIT = function () {
@@ -433,12 +434,14 @@ GameBoyAdvanceGraphics.prototype.compositeLayersNormal = function (OBJBuffer, BG
 		}
 		if ((currentPixel & 0x200000) == 0) {
 			//Normal Pixel:
-			this.lineBuffer[pixelPosition] = currentPixel;
+			gfx_debug("Current Pixel CLN0: ", "0x" + currentPixel.toString(16));
+            this.lineBuffer[pixelPosition] = currentPixel;
 		}
 		else {
 			//OAM Pixel Processing:
 			//Pass the highest two pixels to be arbitrated in the color effects processing:
-			this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.processOAMSemiTransparent(lowerPixel, currentPixel);
+			gfx_debug("Current Pixel CLN1: ", "0x" + currentPixel.toString(16) + ", 0x" + lowerPixel.toString(16));
+            this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.processOAMSemiTransparent(lowerPixel, currentPixel);
 		}
 	}
 }
@@ -477,12 +480,14 @@ GameBoyAdvanceGraphics.prototype.compositeLayersWithEffects = function (OBJBuffe
 		if ((currentPixel & 0x200000) == 0) {
 			//Normal Pixel:
 			//Pass the highest two pixels to be arbitrated in the color effects processing:
-			this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.process(lowerPixel, currentPixel);
+			//gfx_debug("Current Pixel CLWE0: ", "0x" + currentPixel.toString(16) + ", 0x" + lowerPixel.toString(16));
+            this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.process(lowerPixel, currentPixel);
 		}
 		else {
 			//OAM Pixel Processing:
 			//Pass the highest two pixels to be arbitrated in the color effects processing:
-			this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.processOAMSemiTransparent(lowerPixel, currentPixel);
+			//gfx_debug("Current Pixel CLWE0: ", "0x" + currentPixel.toString(16) + ", 0x" + lowerPixel.toString(16));
+            this.lineBuffer[pixelPosition] = this.colorEffectsRenderer.processOAMSemiTransparent(lowerPixel, currentPixel);
 		}
 	}
 }
@@ -1680,24 +1685,28 @@ GameBoyAdvanceGraphics.prototype.writeBG2Y_L0 = function (data) {
 	this.BG2ReferenceY = (this.BG2ReferenceY & 0xFFFFF00) | data;
 	this.actualBG2ReferenceY = (this.BG2ReferenceY << 4) / 0x1000;
 	this.bg2MatrixRenderer.resetReferenceCounters();
+    this.bg2FrameBufferRenderer.resetReferenceCounters();
 }
 GameBoyAdvanceGraphics.prototype.writeBG2Y_L1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2ReferenceY = (data << 8) | (this.BG2ReferenceY & 0xFFF00FF);
 	this.actualBG2ReferenceY = (this.BG2ReferenceY << 4) / 0x1000;
 	this.bg2MatrixRenderer.resetReferenceCounters();
+    this.bg2FrameBufferRenderer.resetReferenceCounters();
 }
 GameBoyAdvanceGraphics.prototype.writeBG2Y_H0 = function (data) {
 	this.midScanLineJIT();
 	this.BG2ReferenceY = (data << 16) | (this.BG2ReferenceY & 0xF00FFFF);
 	this.actualBG2ReferenceY = (this.BG2ReferenceY << 4) / 0x1000;
 	this.bg2MatrixRenderer.resetReferenceCounters();
+    this.bg2FrameBufferRenderer.resetReferenceCounters();
 }
 GameBoyAdvanceGraphics.prototype.writeBG2Y_H1 = function (data) {
 	this.midScanLineJIT();
 	this.BG2ReferenceY = ((data & 0xF) << 24) | (this.BG2ReferenceY & 0xFFFFFF);
 	this.actualBG2ReferenceY = (this.BG2ReferenceY << 4) / 0x1000;
 	this.bg2MatrixRenderer.resetReferenceCounters();
+    this.bg2FrameBufferRenderer.resetReferenceCounters();
 }
 GameBoyAdvanceGraphics.prototype.writeBG3X_L0 = function (data) {
 	this.midScanLineJIT();
