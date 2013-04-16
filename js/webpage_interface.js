@@ -149,10 +149,11 @@ function registerGUIEvents() {
 		event.preventDefault();
 	});
     setInterval(
-            function() {
+            function () {
                 if (!Iodine.paused) {
                     var speed = document.getElementById("speed");
                     speed.textContent = "Speed: " + Iodine.getSpeedPercentage();
+                    Iodine.resetMetrics();
                 }
             }
     , 500);
