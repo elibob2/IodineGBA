@@ -148,6 +148,14 @@ function registerGUIEvents() {
 		update_log_increment();
 		event.preventDefault();
 	});
+    setInterval(
+            function() {
+                if (!Iodine.paused) {
+                    var speed = document.getElementById("speed");
+                    speed.textContent = "Speed: " + Iodine.getSpeedPercentage();
+                }
+            }
+    , 500);
 }
 function attachBIOS(BIOS) {
 	Iodine.attachBIOS(new Uint8Array(BIOS));
