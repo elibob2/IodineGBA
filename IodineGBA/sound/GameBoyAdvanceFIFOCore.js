@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -18,24 +19,23 @@ function GameBoyAdvanceFIFO(IOCore) {
 	this.initializeFIFO();
 }
 GameBoyAdvanceFIFO.prototype.initializeFIFO = function () {
-	this.buffer = getUint8Array(0x20);
+	this.buffer = getInt8Array(0x20);
 	this.count = 0;
 	this.position = 0;
 }
 GameBoyAdvanceFIFO.prototype.push = function (sample) {
-	this.buffer[(this.position + this.count) & 0x1F] = sample;
-	this.position = (this.position + (this.count >> 5)) & 0x1F;
-	this.count += 1 - (this.count >> 5);
+	this.buffer[(this.position + this.count) & 0x1F] = (sample << 24) >> 24;
+	this.count = Math.min(this.count + 1, 0x20);    //Should we cap at 0x20 or overflow back to 0 and reset queue?
 }
 GameBoyAdvanceFIFO.prototype.shift = function () {
 	var output = 0;
 	if (this.count > 0) {
 		--this.count;
-		output = this.buffer[this.position];
+		output = this.buffer[this.position] << 2;
 		this.position = (this.position + 1) & 0x1F;
 	}
-	return (output << 24) >> 22;
+	return output | 0;
 }
 GameBoyAdvanceFIFO.prototype.requestingDMA = function () {
-    return (this.count <= 0x10);
+	return (this.count <= 0x10);
 }

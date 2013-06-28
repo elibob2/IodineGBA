@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -189,52 +190,296 @@ GameBoyAdvanceSWI.prototype.SoftReset = function () {
 	
 }
 GameBoyAdvanceSWI.prototype.RegisterRAMReset = function () {
-	
+	var control = this.CPUCore.registers[0];
+    if ((control & 0x1) == 0x1) {
+        //Clear 256K on-board WRAM
+        for (var address = 0x200000; address < 0x2040000; address += 4) {
+            this.IOCore.memory.memoryWrite32(address >>> 0, 0);
+        }
+    }
+    if ((control & 0x2) == 0x2) {
+        //Clear 32K in-chip WRAM
+        for (var address = 0x300000; address < 0x3008000; address += 4) {
+            this.IOCore.memory.memoryWrite32(address >>> 0, 0);
+        }
+    }
+    if ((control & 0x4) == 0x4) {
+        //Clear Palette
+        
+    }
+    if ((control & 0x8) == 0x8) {
+        //Clear VRAM
+        
+    }
+    if ((control & 0x10) == 0x10) {
+        //Clear OAM
+        
+    }
+    if ((control & 0x20) == 0x20) {
+        //Reset SIO registers
+        
+    }
+    if ((control & 0x40) == 0x40) {
+        //Reset Sound registers
+        
+    }
+    if ((control & 0x80) == 0x80) {
+        //Reset all other registers
+        
+    }
 }
 GameBoyAdvanceSWI.prototype.Halt = function () {
-	
+	this.IOCore.systemStatus |= 2;
 }
 GameBoyAdvanceSWI.prototype.Stop = function () {
-	
+	this.IOCore.systemStatus |= 4;
 }
 GameBoyAdvanceSWI.prototype.IntrWait = function () {
-	
+	this.IOCore.irq.IME = true;
+    if ((this.CPUCore.registers[0] & 0x1) == 0x1) {
+        this.IOCore.irq.interruptsRequested = 0;
+    }
+    this.IOCore.irq.interruptsEnabled = this.CPUCore.registers[1] & 0x3FFF;
+    this.Halt();
 }
 GameBoyAdvanceSWI.prototype.VBlankIntrWait = function () {
-	
+	this.IOCore.irq.IME = true;
+    this.IOCore.irq.interruptsRequested = 0;
+    this.IOCore.irq.interruptsEnabled = 0x1;
+    this.Halt();
 }
 GameBoyAdvanceSWI.prototype.Div = function () {
-	
+	var numerator = this.CPUCore.registers[0];
+    var denominator = this.CPUCore.registers[1];
+    if (denominator == 0) {
+        throw(new Error("Division by 0 called."));
+    }
+    var result = (numerator / denominator) | 0;
+    this.CPUCore.registers[0] = result;
+    this.CPUCore.registers[1] = (numerator % denominator) | 0;
+    this.CPUCore.registers[3] = Math.abs(result) | 0;
 }
 GameBoyAdvanceSWI.prototype.DivArm = function () {
-	
+	var numerator = this.CPUCore.registers[1];
+    var denominator = this.CPUCore.registers[0];
+    if (denominator == 0) {
+        throw(new Error("Division by 0 called."));
+    }
+    var result = (numerator / denominator) | 0;
+    this.CPUCore.registers[0] = result;
+    this.CPUCore.registers[1] = (numerator % denominator) | 0;
+    this.CPUCore.registers[3] = Math.abs(result) | 0;
 }
 GameBoyAdvanceSWI.prototype.Sqrt = function () {
-	
+	this.CPUCore.registers[0] = Math.sqrt(this.CPUCore.registers[0] >>> 0) | 0;
 }
 GameBoyAdvanceSWI.prototype.ArcTan = function () {
-	
+    var a = (-(this.CPUCore.performMUL32(this.CPUCore.registers[0], this.CPUCore.registers[0], 0) >> 14)) | 0;
+    var b = ((this.CPUCore.performMUL32(0xA9, a, 0) >> 14) + 0x390) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0x91C) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0xFB6) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0x16AA) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0x2081) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0x3651) | 0;
+    b = ((this.CPUCore.performMUL32(b, a, 0) >> 14) + 0xA2F9) | 0;
+    a = this.CPUCore.performMUL32(this.CPUCore.registers[0], b, 0) >> 16;
+    this.CPUCore.registers[0] = a;
 }
 GameBoyAdvanceSWI.prototype.ArcTan2 = function () {
-	
+	var x = this.CPUCore.registers[0];
+    var y = this.CPUCore.registers[1];
+    var result = 0;
+    if (y == 0) {
+        result = (x >> 16) & 0x8000;
+    }
+    else {
+        if (x == 0) {
+            result = ((y >> 16) & 0x8000) + 0x4000;
+        }
+        else {
+            if ((Math.abs(x) > Math.abs(y)) || (Math.abs(x) == Math.abs(y) && (x >= 0 || y >= 0))) {
+                this.CPUCore.registers[1] = x;
+                this.CPUCore.registers[0] = y << 14;
+                this.Div();
+                this.ArcTan();
+                if (x < 0) {
+                    result = 0x8000 + this.CPUCore.registers[0];
+                }
+                else {
+                    result = (((y >> 16) & 0x8000) << 1) + this.CPUCore.registers[0];
+                }
+            }
+            else {
+                this.CPUCore.registers[0] = x << 14;
+                this.Div();
+                this.ArcTan();
+                result = (0x4000 + ((y >> 16) & 0x8000)) - this.CPUCore.registers[0];
+            }
+        }
+    }
+    this.CPUCore.registers[0] = result | 0;
 }
 GameBoyAdvanceSWI.prototype.CpuSet = function () {
-	
+	var source = this.CPUCore.registers[0];
+    var destination = this.CPUCore.registers[1];
+    var control = this.CPUCore.registers[2];
+    var count = control & 0x1FFFFF;
+    var isFixed = ((control & 0x1000000) != 0);
+    var is32 = ((control & 0x4000000) != 0);
+    if (is32) {
+        while (count-- > 0) {
+            if (source >= 0x4000 && destination >= 0x4000) {
+                this.IOCore.memory.memoryWrite32(destination >>> 0, this.IOCore.memory.memoryRead32(source >>> 0) | 0);
+            }
+            if (!isFixed) {
+                source += 0x4;
+            }
+            destination += 0x4;
+        }
+    }
+    else {
+        while (count-- > 0) {
+            if (source >= 0x4000 && destination >= 0x4000) {
+                this.IOCore.memory.memoryWrite16(destination >>> 0, this.IOCore.memory.memoryRead16(source >>> 0) | 0);
+            }
+            if (!isFixed) {
+                source += 0x2;
+            }
+            destination += 0x2;
+        }
+    }
 }
 GameBoyAdvanceSWI.prototype.CpuFastSet = function () {
-	
+	var source = this.CPUCore.registers[0];
+    var destination = this.CPUCore.registers[1];
+    var control = this.CPUCore.registers[2];
+    var count = control & 0x1FFFFF;
+    var isFixed = ((control & 0x1000000) != 0);
+    var currentRead = 0;
+    while (count-- > 0) {
+        if (source >= 0x4000) {
+            currentRead = this.IOCore.memory.memoryRead32(source >>> 0) | 0;
+            for (var i = 0; i < 0x8; ++i) {
+                if (destination >= 0x4000) {
+                    this.IOCore.memory.memoryWrite32(destination >>> 0, currentRead | 0);
+                }
+                destination += 0x4;
+            }
+        }
+        if (!isFixed) {
+            source += 0x4;
+        }
+    }
 }
 GameBoyAdvanceSWI.prototype.GetBiosChecksum = function () {
-	
+	this.CPUCore.registers[0] = 0xBAAE187F;
 }
 GameBoyAdvanceSWI.prototype.BgAffineSet = function () {
-	
+	var source = this.CPUCore.registers[0];
+    var destination = this.CPUCore.registers[1];
+    var numberCalculations = this.CPUCore.registers[2];
+    while (numberCalculations-- > 0) {
+        var cx = this.IOCore.memory.memoryRead32(source >>> 0);
+        source += 0x4;
+        var cy = this.IOCore.memory.memoryRead32(source >>> 0);
+        source += 0x4;
+        var dispx = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var dispy = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var rx = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var ry = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var theta = (this.IOCore.memory.memoryRead16(source >>> 0) >> 8) / 0x80 * Math.PI;
+        source += 0x4;
+        var cosAngle = Math.cos(theta);
+        var sineAngle = Math.sin(theta);
+        var dx = rx * cosAngle;
+        var dmx = rx * sineAngle;
+        var dy = ry * sineAngle;
+        var dmy = ry * cosAngle;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dx | 0);
+        destination += 2;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, (-dmx) | 0);
+        destination += 2;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dy | 0);
+        destination += 2;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dmy | 0);
+        destination += 2;
+        this.IOCore.memory.memoryWrite32(destination >>> 0, (cx - dx * dispx + dmx * dispy) | 0);
+        destination += 4;
+        this.IOCore.memory.memoryWrite32(destination >>> 0, (cy - dy * dispx + dmy * dispy) | 0);
+        destination += 4;
+    }
 }
 GameBoyAdvanceSWI.prototype.ObjAffineSet = function () {
-	
+	var source = this.CPUCore.registers[0];
+    var destination = this.CPUCore.registers[1];
+    var numberCalculations = this.CPUCore.registers[2];
+    var offset = this.CPUCore.registers[3];
+    while (numberCalculations-- > 0) {
+        var rx = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var ry = (this.IOCore.memory.memoryRead16(source >>> 0) << 16) >> 16;
+        source += 0x2;
+        var theta = (this.IOCore.memory.memoryRead16(source >>> 0) >> 8) / 0x80 * Math.PI;
+        source += 0x4;
+        var cosAngle = Math.cos(theta);
+        var sineAngle = Math.sin(theta);
+        var dx = rx * cosAngle;
+        var dmx = rx * sineAngle;
+        var dy = ry * sineAngle;
+        var dmy = ry * cosAngle;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dx | 0);
+        destination += offset;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, (-dmx) | 0);
+        destination += offset;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dy | 0);
+        destination += offset;
+        this.IOCore.memory.memoryWrite16(destination >>> 0, dmy | 0);
+        destination += offset;
+    }
 }
 GameBoyAdvanceSWI.prototype.BitUnPack = function () {
-	
+	var source = this.CPUCore.registers[0];
+    var destination = this.CPUCore.registers[1];
+    var unpackSource = this.CPUCore.registers[2];
+    var length = this.IOCore.memory.memoryRead16(unpackSource >>> 0);
+    unpackSource += 0x2;
+    var widthSource = this.IOCore.memory.memoryRead16(unpackSource >>> 0);
+    unpackSource += 0x1;
+    var widthDestination = this.IOCore.memory.memoryRead8(unpackSource >>> 0);
+    unpackSource += 0x1;
+    var offset = this.IOCore.memory.memoryRead32(unpackSource >>> 0);
+    var dataOffset = offset & 0x7FFFFFFF;
+    var zeroData = (offset < 0);
+    var bitDiff = widthDestination - widthSource;
+    if (bitDiff >= 0) {
+        var resultWidth = 0;
+        while (length > 0) {
+            var result = 0;
+            var readByte = this.IOCore.memory.memoryRead8((source++) >>> 0);
+            for (var index = 0, widthIndex = 0; index < 8; index += widthSource, widthIndex += widthDestination) {
+                var temp = (readByte >> index) & ((widthSource << 1) - 1);
+                if (temp > 0 || zeroData) {
+                    temp += dataOffset;
+                }
+                temp <<= widthIndex;
+                result |= temp;
+            }
+            resultWidth += widthIndex;
+            if (resultWidth == 32) {
+                resultWidth = 0;
+                this.IOCore.memory.memoryWrite32(destination >>> 0, result | 0);
+                destination += 4;
+                length -= 4;
+            }
+        }
+        if (resultWidth > 0) {
+            this.IOCore.memory.memoryWrite32(destination >>> 0, result | 0);
+        }
+    }
 }
 GameBoyAdvanceSWI.prototype.LZ77UnCompWram = function () {
 	
@@ -261,7 +506,12 @@ GameBoyAdvanceSWI.prototype.Diff16bitUnFilter = function () {
 	
 }
 GameBoyAdvanceSWI.prototype.SoundBias = function () {
-	
+	if (this.CPUCore.registers[0] == 0) {
+        this.IOCore.memory.memoryWrite16(0x4000088, 0);
+    }
+    else {
+        this.IOCore.memory.memoryWrite16(0x4000088, 0x200);
+    }
 }
 GameBoyAdvanceSWI.prototype.SoundDriverInit = function () {
 	
@@ -279,7 +529,10 @@ GameBoyAdvanceSWI.prototype.SoundChannelClear = function () {
 	
 }
 GameBoyAdvanceSWI.prototype.MidiKey2Freq = function () {
-	
+	var frequency = this.CPUCore.memoryRead32((this.CPUCore.registers[0] + 4) >>> 0);
+    var temp = (180 - this.CPUCore.registers[1]) - (this.CPUCore.registers[2] / 0x100);
+    temp = Math.pow(2, temp / 12);
+    this.CPUCore.registers[0] = (frequency / temp) | 0;
 }
 GameBoyAdvanceSWI.prototype.SoundDriverUnknown = function () {
 	
@@ -291,7 +544,7 @@ GameBoyAdvanceSWI.prototype.HardReset = function () {
 	
 }
 GameBoyAdvanceSWI.prototype.CustomHalt = function () {
-	
+	this.IOCore.wait.writeHALTCNT(this.CPUCore.registers[2]);
 }
 GameBoyAdvanceSWI.prototype.SoundDriverVSyncOff = function () {
 	

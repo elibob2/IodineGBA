@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -32,13 +33,13 @@ GameBoyAdvanceOBJWindowRenderer.prototype.renderNormalScanLine = function (line,
 	//Loop through each pixel on the line:
 	for (var pixelPosition = 0, currentPixel = 0, workingPixel = 0, lowerPixel = 0; pixelPosition < 240; ++pixelPosition) {
 		//If non-transparent OBJ (Marked for OBJ WIN) pixel detected:
-		if ((OBJWindowBuffer[pixelPosition] & this.gfx.transparency) == 0) {
+		if (OBJWindowBuffer[pixelPosition] < this.gfx.transparency) {
 			//Start with backdrop color:
-			lowerPixel = currentPixel = this.gfx.transparency;
+			lowerPixel = currentPixel = this.gfx.backdrop;
 			//Loop through all layers each pixel to resolve priority:
 			for (stackIndex = 0; stackIndex < stackDepth; ++stackIndex) {
 				workingPixel = layerStack[stackIndex][pixelPosition];
-				if ((workingPixel & 0x1D00000) <= (currentPixel & 0x1D00000)) {
+				if ((workingPixel & 0x3800000) <= (currentPixel & 0x1800000)) {
 					/*
 						If higher priority than last pixel and not transparent.
 						Also clear any plane layer bits other than backplane for
@@ -49,8 +50,18 @@ GameBoyAdvanceOBJWindowRenderer.prototype.renderNormalScanLine = function (line,
 					lowerPixel = currentPixel;
 					currentPixel = workingPixel;
 				}
+                else if ((workingPixel & 0x3800000) <= (lowerPixel & 0x1800000)) {
+					/*
+                     If higher priority than last pixel and not transparent.
+                     Also clear any plane layer bits other than backplane for
+                     transparency.
+                     
+                     Keep a copy of the previous pixel (backdrop or non-transparent) for the color effects:
+                     */
+					lowerPixel = workingPixel;
+				}
 			}
-			if ((currentPixel & 0x200000) == 0) {
+			if ((currentPixel & 0x400000) == 0) {
 				//Normal Pixel:
 				lineBuffer[pixelPosition] = currentPixel;
 			}
@@ -79,13 +90,13 @@ GameBoyAdvanceOBJWindowRenderer.prototype.renderScanLineWithEffects = function (
 	//Loop through each pixel on the line:
 	for (var pixelPosition = 0, currentPixel = 0, workingPixel = 0, lowerPixel = 0; pixelPosition < 240; ++pixelPosition) {
 		//If non-transparent OBJ (Marked for OBJ WIN) pixel detected:
-		if ((OBJWindowBuffer[pixelPosition] & this.gfx.transparency) == 0) {
+		if (OBJWindowBuffer[pixelPosition] < this.gfx.transparency) {
 			//Start with backdrop color:
-			lowerPixel = currentPixel = this.gfx.transparency;
+			lowerPixel = currentPixel = this.gfx.backdrop;
 			//Loop through all layers each pixel to resolve priority:
 			for (stackIndex = 0; stackIndex < stackDepth; ++stackIndex) {
 				workingPixel = layerStack[stackIndex][pixelPosition];
-				if ((workingPixel & 0x1D00000) <= (currentPixel & 0x1D00000)) {
+				if ((workingPixel & 0x3800000) <= (currentPixel & 0x1800000)) {
 					/*
 						If higher priority than last pixel and not transparent.
 						Also clear any plane layer bits other than backplane for
@@ -96,8 +107,18 @@ GameBoyAdvanceOBJWindowRenderer.prototype.renderScanLineWithEffects = function (
 					lowerPixel = currentPixel;
 					currentPixel = workingPixel;
 				}
+                else if ((workingPixel & 0x3800000) <= (lowerPixel & 0x1800000)) {
+					/*
+                     If higher priority than last pixel and not transparent.
+                     Also clear any plane layer bits other than backplane for
+                     transparency.
+                     
+                     Keep a copy of the previous pixel (backdrop or non-transparent) for the color effects:
+                     */
+					lowerPixel = workingPixel;
+				}
 			}
-			if ((currentPixel & 0x200000) == 0) {
+			if ((currentPixel & 0x400000) == 0) {
 				//Normal Pixel:
 				//Pass the highest two pixels to be arbitrated in the color effects processing:
 				lineBuffer[pixelPosition] = this.gfx.colorEffectsRenderer.process(lowerPixel, currentPixel);
@@ -111,5 +132,5 @@ GameBoyAdvanceOBJWindowRenderer.prototype.renderScanLineWithEffects = function (
 	}
 }
 GameBoyAdvanceOBJWindowRenderer.prototype.preprocess = function () {
-	this.renderScanLine = (this.gfx.WIN0Effects) ? this.renderScanLineWithEffects : this.renderNormalScanLine;
+	this.renderScanLine = (this.gfx.WINOBJEffectsOutside) ? this.renderScanLineWithEffects : this.renderNormalScanLine;
 }

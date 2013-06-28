@@ -1,5 +1,23 @@
+"use strict";
+/*
+ * This file is part of IodineGBA
+ *
+ * Copyright (C) 2012-2013 Grant Galitz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ * The full license is available at http://www.gnu.org/licenses/gpl.html
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ */
 function GameBoyAdvanceDMA(IOCore) {
 	this.IOCore = IOCore;
+	this.memory = this.IOCore.memory;
 	this.emulatorCore = IOCore.emulatorCore;
 	this.initialize();
 }
@@ -103,8 +121,10 @@ GameBoyAdvanceDMA.prototype.writeDMAControl1 = function (dmaChannel, data) {
 	control[1] = (data >> 4) & 0x3;
 	control[0] = ((data & 0x40) == 0x40);
 	if (data > 0x7F) {
-		this.enabled[dmaChannel] = this.DMA_ENABLE_TYPE[dmaChannel][control[1]];
-		this.enableDMAChannel(dmaChannel);
+		if (this.enabled[dmaChannel] == 0) {
+			this.enabled[dmaChannel] = this.DMA_ENABLE_TYPE[dmaChannel][control[1]];
+			this.enableDMAChannel(dmaChannel);
+		}
 	}
 	else {
 		this.enabled[dmaChannel] = 0;
@@ -226,71 +246,20 @@ GameBoyAdvanceDMA.prototype.handleDMACopy = function (dmaChannel) {
 	var destination = this.destinationShadow[dmaChannel];
 	//Load in the control register:
 	var control = this.controlShadow[dmaChannel];
-	debug_io(
-		"DMA Channel Being Handled",
-		dmaChannel,
-		dmaChannel,
-		[
-			[
-				"IRQ",
-				control[0]
-			],
-			[
-				"Enable Mode",
-				outputCleanse(this.DMA_ENABLE_TYPE[dmaChannel][control[1]])
-			],
-			[
-				"32/16",
-				control[2]
-			],
-			[
-				"Repeat",
-				control[3]
-			],
-			[
-				"Src Address Mode",
-				control[4]
-			],
-			[
-				"Dst Address Mode",
-				control[5]
-			],
-			[
-				"Source",
-				outputCleanse(source)
-			],
-			[
-				"Destination",
-				outputCleanse(destination)
-			],
-            [
-                "Word Count",
-                this.wordCountShadow[dmaChannel]
-            ],
-            [
-                "Channel Pending Flags",
-                this.pending
-            ],
-            [
-                "Channel Enable Flags",
-                this.enabled
-            ]
-		]
-	);
 	//Transfer Data:
 	if (control[2]) {
 		//32-bit Transfer:
-		this.IOCore.memoryWrite32(destination, this.IOCore.memoryRead32(source));
-		this.decrementWordCount(control, dmaChannel, source, destination, 4);
+		this.memory.memoryWrite32(destination >>> 0, this.memory.memoryRead32(source >>> 0) | 0);
+		this.decrementWordCount(control, dmaChannel | 0, source | 0, destination | 0, 4);
 	}
 	else {
 		//16-bit Transfer:
-		this.IOCore.memoryWrite16(destination, this.IOCore.memoryRead16(source));
-		this.decrementWordCount(control, dmaChannel, source, destination, 2);
+		this.memory.memoryWrite16(destination >>> 0, this.memory.memoryRead16(source >>> 0) | 0);
+		this.decrementWordCount(control, dmaChannel | 0, source | 0, destination | 0, 2);
 	}
 }
 GameBoyAdvanceDMA.prototype.decrementWordCount = function (control, dmaChannel, source, destination, transferred) {
-	var wordCountShadow = (this.wordCountShadow[dmaChannel] - 1) & 0x3FFF;
+	var wordCountShadow = (this.wordCountShadow[dmaChannel] - 1) & ((dmaChannel < 3) ? 0x3FFF : 0xFFFF);
 	if (wordCountShadow == 0) {
 		if (!control[3]) {
 			//Disable the enable bit:
@@ -312,15 +281,24 @@ GameBoyAdvanceDMA.prototype.decrementWordCount = function (control, dmaChannel, 
 		}
 		//Check to see if we should flag for IRQ:
 		if (control[0]) {
-			this.IOCore.irq.requestIRQ(dmaChannel << 8);
+			var dmaIRQFlag = 0x100;
+			switch (dmaChannel) {
+				case 3:
+					dmaIRQFlag <<= 1;
+				case 2:
+					dmaIRQFlag <<= 1;
+				case 1:
+					dmaIRQFlag <<= 1;
+			}
+			this.IOCore.irq.requestIRQ(dmaIRQFlag);
 		}
 		//Update source address:
 		switch (control[4]) {
 			case 0:	//Increment
-				this.sourceShadow[dmaChannel] = (source + transferred) & -1;
+				this.sourceShadow[dmaChannel] = (source + transferred) | 0;
 				break;
 			case 1:	//Decrement
-				this.sourceShadow[dmaChannel] = (source - transferred) & -1;
+				this.sourceShadow[dmaChannel] = (source - transferred) | 0;
 				break;
 			case 3:	//Reload
 				//Prohibited code, should not get here:
@@ -329,10 +307,10 @@ GameBoyAdvanceDMA.prototype.decrementWordCount = function (control, dmaChannel, 
 		//Update destination address:
 		switch (control[5]) {
 			case 0:	//Increment
-				this.destinationShadow[dmaChannel] = (destination + transferred) & -1;
+				this.destinationShadow[dmaChannel] = (destination + transferred) | 0;
 				break;
 			case 1:	//Decrement
-				this.destinationShadow[dmaChannel] = (destination - transferred) & -1;
+				this.destinationShadow[dmaChannel] = (destination - transferred) | 0;
 				break;
 			case 3:	//Reload
 				this.destinationShadow[dmaChannel] = this.destination[dmaChannel];
@@ -343,19 +321,19 @@ GameBoyAdvanceDMA.prototype.decrementWordCount = function (control, dmaChannel, 
 		switch (control[4]) {
 			case 0:	//Increment
 			case 3:	//Prohibited code...
-				this.sourceShadow[dmaChannel] = (source + transferred) & -1;
+				this.sourceShadow[dmaChannel] = (source + transferred) | 0;
 				break;
 			case 1:
-				this.sourceShadow[dmaChannel] = (source - transferred) & -1;
+				this.sourceShadow[dmaChannel] = (source - transferred) | 0;
 		}
 		//Update destination address:
 		switch (control[5]) {
 			case 0:	//Increment
 			case 3:	//Increment
-				this.destinationShadow[dmaChannel] = (destination + transferred) & -1;
+				this.destinationShadow[dmaChannel] = (destination + transferred) | 0;
 				break;
 			case 1:	//Decrement
-				this.destinationShadow[dmaChannel] = (destination - transferred) & -1;
+				this.destinationShadow[dmaChannel] = (destination - transferred) | 0;
 		}
 	}
 	//Save the new word count:
@@ -365,14 +343,14 @@ GameBoyAdvanceDMA.prototype.nextEventTime = function () {
 	var clocks = -1;
 	var workbench = -1;
 	for (var dmaChannel = 0; dmaChannel < 4; ++dmaChannel) {
-		switch (this.enabled[dmaChannel]) {
+		switch (this.enabled[dmaChannel] & 0x3F) {
 			//V_BLANK
 			case 0x2:
 				workbench = this.IOCore.gfx.nextVBlankEventTime();
 				break;
 			//H_BLANK:
 			case 0x4:
-				workbench = this.IOCore.gfx.nextHBlankEventTime();
+				workbench = this.IOCore.gfx.nextHBlankDMAEventTime();
 				break;
 			//FIFO_A:
 			case 0x8:
@@ -388,36 +366,44 @@ GameBoyAdvanceDMA.prototype.nextEventTime = function () {
 		}
 		clocks = (clocks > -1) ? ((workbench > -1) ? Math.min(clocks, workbench) : clocks) : workbench;
 	}
-	return clocks;
+	return clocks | 0;
 }
-GameBoyAdvanceDMA.prototype.nextIRQEventTime = function () {
+GameBoyAdvanceDMA.prototype.nextIRQEventTime = function (dmaChannel) {
 	var clocks = -1;
-	var workbench = -1;
-	for (var dmaChannel = 0; dmaChannel < 4; ++dmaChannel) {
-		if (this.controlShadow[dmaChannel][0]) {
-			switch (this.enabled[dmaChannel]) {
-				//V_BLANK
-				case 0x2:
-					workbench = this.IOCore.gfx.nextVBlankEventTime();
-					break;
-				//H_BLANK:
-				case 0x4:
-					workbench = this.IOCore.gfx.nextHBlankEventTime();
-					break;
-				//FIFO_A:
-				case 0x8:
-					workbench = this.IOCore.sound.nextFIFOAEventTime();
-					break;
-				//FIFO_B:
-				case 0x10:
-					workbench = this.IOCore.sound.nextFIFOBEventTime();
-					break;
-				//DISPLAY_SYNC:
-				case 0x20:
-					workbench = this.IOCore.gfx.nextDisplaySyncEventTime();
-			}
-			clocks = (clocks > -1) ? ((workbench > -1) ? Math.min(clocks, workbench) : clocks) : workbench;
+	if (this.controlShadow[dmaChannel][0]) {
+		switch (this.enabled[dmaChannel] & 0x3F) {
+			//V_BLANK
+			case 0x2:
+				clocks = this.IOCore.gfx.nextVBlankEventTime();
+				break;
+			//H_BLANK:
+			case 0x4:
+				clocks = this.IOCore.gfx.nextHBlankDMAEventTime();
+				break;
+			//FIFO_A:
+			case 0x8:
+				clocks = this.IOCore.sound.nextFIFOAEventTime();
+				break;
+			//FIFO_B:
+			case 0x10:
+				clocks = this.IOCore.sound.nextFIFOBEventTime();
+				break;
+			//DISPLAY_SYNC:
+			case 0x20:
+				clocks = this.IOCore.gfx.nextDisplaySyncEventTime();
 		}
 	}
-	return clocks;
+	return clocks | 0;
+}
+GameBoyAdvanceDMA.prototype.nextDMA0IRQEventTime = function () {
+	return this.nextIRQEventTime(0);
+}
+GameBoyAdvanceDMA.prototype.nextDMA1IRQEventTime = function () {
+	return this.nextIRQEventTime(1);
+}
+GameBoyAdvanceDMA.prototype.nextDMA2IRQEventTime = function () {
+	return this.nextIRQEventTime(2);
+}
+GameBoyAdvanceDMA.prototype.nextDMA3IRQEventTime = function () {
+	return this.nextIRQEventTime(3);
 }

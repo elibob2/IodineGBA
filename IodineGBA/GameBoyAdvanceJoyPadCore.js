@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -104,18 +105,18 @@ GameBoyAdvanceJoyPad.prototype.keyRelease = function (keyReleased) {
 }
 GameBoyAdvanceJoyPad.prototype.checkForIRQ = function () {
 	if (this.keyIRQType) {
-		if ((~this.keyInput & this.keyInterrupt & 0x3FF) == (this.keyInterrupt & 0x3FF)) {
+		if (((~this.keyInput) & this.keyInterrupt & 0x3FF) == (this.keyInterrupt & 0x3FF)) {
 			this.IOCore.irq.requestIRQ(0x1000);
 		}
 	}
-	else if ((~this.keyInput & this.keyInterrupt & 0x3FF) != 0) {
+	else if (((~this.keyInput) & this.keyInterrupt & 0x3FF) != 0) {
 		this.IOCore.irq.requestIRQ(0x1000);
 	}
 }
 /*GameBoyAdvanceJoyPad.prototype.nextIRQEventTime = function {
-	//Always return -1 here, as we don't input joypad updates at the same time we're running the interp loop:
-	return -1;
-}*/
+ //Always return -1 here, as we don't input joypad updates at the same time we're running the interp loop:
+ return -1;
+ }*/
 GameBoyAdvanceJoyPad.prototype.readKeyStatus0 = function () {
 	return this.keyInput & 0xFF;
 }
@@ -125,17 +126,6 @@ GameBoyAdvanceJoyPad.prototype.readKeyStatus1 = function () {
 GameBoyAdvanceJoyPad.prototype.writeKeyControl0 = function (data) {
 	this.keyInterrupt &= 0x300;
 	this.keyInterrupt |= data;
-	debug_io(
-		"KEYCNT0",
-		0x40000132,
-		data,
-		[
-			[
-				"Key Interrupt",
-				outputCleanse(this.keyInterrupt)
-			]
-		]
-	);
 }
 GameBoyAdvanceJoyPad.prototype.readKeyControl0 = function () {
 	return this.keyInterrupt & 0xFF;
@@ -145,25 +135,6 @@ GameBoyAdvanceJoyPad.prototype.writeKeyControl1 = function (data) {
 	this.keyInterrupt |= data << 8;
 	this.keyIRQType = (data > 0x7F);
 	this.keyIRQEnabled = ((data & 0x40) == 0x40);
-	debug_io(
-		"KEYCNT1",
-		0x40000133,
-		data,
-		[
-			[
-				"Key Interrupt",
-				outputCleanse(this.keyInterrupt)
-			],
-			[
-				"Key IRQ Type",
-				outputCleanse(this.keyIRQType)
-			],
-			[
-				"Key IRQ Enabled",
-				outputCleanse(this.keyIRQEnabled)
-			]
-		]
-	);
 }
 GameBoyAdvanceJoyPad.prototype.readKeyControl1 = function () {
 	return ((this.keyInterrupt >> 8) & 0xC3) | 0x3C;

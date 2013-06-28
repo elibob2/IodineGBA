@@ -21,50 +21,70 @@ window.onload = function () {
 function registerGUIEvents() {
 	addEvent("keydown", document, keyDown);
 	addEvent("keyup", document, function (event) {
-		switch (event.keyCode) {
-			case 68:
-				lowerVolume();
-				break;
-			case 82:
-				raiseVolume();
-				break;
-			case 49:
-				emuSpeed = Math.min(emuSpeed + 0.25, 4);
-				Iodine.setSpeed(emuSpeed);
-				break;
-			case 50:
-				emuSpeed = Math.max(emuSpeed - 0.25, 0.25);
-				Iodine.setSpeed(emuSpeed);
-				break;
-			default:
-				//Control keys / other
-				keyUp(event);
-		}
-	});
+             switch (event.keyCode) {
+             case 68:
+             lowerVolume();
+             break;
+             case 82:
+             raiseVolume();
+             break;
+             case 51:
+             emuSpeed = Math.min(emuSpeed + 0.25, 4);
+             Iodine.setSpeed(emuSpeed);
+             break;
+             case 52:
+             emuSpeed = Math.max(emuSpeed - 0.10, 0.10);
+             Iodine.setSpeed(emuSpeed);
+             break;
+             default:
+             //Control keys / other
+             keyUp(event);
+             }
+             });
 	addEvent("change", document.getElementById("rom_load"), function () {
-		if (typeof this.files != "undefined") {
-			if (this.files.length >= 1) {
-				//Gecko 1.9.2+ (Standard Method)
-				var binaryHandle = new FileReader();
-				binaryHandle.onloadend = function () {
-					attachROM(this.result);
-				}
-				binaryHandle.readAsArrayBuffer(this.files[this.files.length - 1]);
-			}
-		}
-	});
+             if (typeof this.files != "undefined") {
+             if (this.files.length >= 1) {
+             //Gecko 1.9.2+ (Standard Method)
+             try {
+             var binaryHandle = new FileReader();
+             binaryHandle.onloadend = function () {
+             attachROM(this.result);
+             }
+             binaryHandle.readAsArrayBuffer(this.files[this.files.length - 1]);
+             }
+             catch (error) {
+             var result = this.files[this.files.length - 1].getAsBinary();
+             var resultConverted = [];
+             for (var index = 0; index < result.length; ++index) {
+             resultConverted[index] = result.charCodeAt(index) & 0xFF;
+             }
+             attachROM(resultConverted);
+             }
+             }
+             }
+             });
 	addEvent("change", document.getElementById("bios_load"), function () {
-		if (typeof this.files != "undefined") {
-			if (this.files.length >= 1) {
-				//Gecko 1.9.2+ (Standard Method)
-				var binaryHandle = new FileReader();
-				binaryHandle.onloadend = function () {
-					attachBIOS(this.result);
-				}
-				binaryHandle.readAsArrayBuffer(this.files[this.files.length - 1]);
-			}
-		}
-	});
+             if (typeof this.files != "undefined") {
+             if (this.files.length >= 1) {
+             //Gecko 1.9.2+ (Standard Method)
+             try {
+             var binaryHandle = new FileReader();
+             binaryHandle.onloadend = function () {
+             attachBIOS(this.result);
+             }
+             binaryHandle.readAsArrayBuffer(this.files[this.files.length - 1]);
+             }
+             catch (error) {
+             var result = this.files[this.files.length - 1].getAsBinary();
+             var resultConverted = [];
+             for (var index = 0; index < result.length; ++index) {
+             resultConverted[index] = result.charCodeAt(index) & 0xFF;
+             }
+             attachBIOS(resultConverted);
+             }
+             }
+             }
+             });
 	addEvent("click", document.getElementById("play"), function (event) {
 		Iodine.play();
 		this.style.display = "none";
@@ -91,6 +111,23 @@ function registerGUIEvents() {
 			Iodine.disableAudio();
 		}
 	});
+    document.getElementById("skip_boot").checked = true;
+    addEvent("click", document.getElementById("skip_boot"), function () {
+             Iodine.toggleSkipBootROM(this.checked);
+             });
+    document.getElementById("lle_jit").checked = false;
+    addEvent("click", document.getElementById("lle_jit"), function () {
+             Iodine.toggleDynarec(this.checked);
+             });
+    setInterval(
+                function () {
+                if (!Iodine.paused) {
+                var speed = document.getElementById("speed");
+                speed.textContent = "Speed: " + Iodine.getSpeedPercentage();
+                }
+                Iodine.resetMetrics();
+                }
+                ,500);
 	document.getElementById("display_amount").value = "1000";
 	addEvent("change", document.getElementById("display_amount"), function () {
 		display_amount = this.value;

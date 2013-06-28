@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,6 +17,8 @@
  */
 function GameBoyAdvanceCPU(IOCore) {
 	this.IOCore = IOCore;
+    this.memory = this.IOCore.memory;
+    this.emulatorCore = this.IOCore.emulatorCore;
 	this.wait = this.IOCore.wait;
 	this.mul64ResultHigh = 0;	//Scratch MUL64.
 	this.mul64ResultLow = 0;	//Scratch MUL64.
@@ -25,39 +28,34 @@ GameBoyAdvanceCPU.prototype.initialize = function () {
 	this.initializeRegisters();
 	this.ARM = new ARMInstructionSet(this);
 	this.THUMB = new THUMBInstructionSet(this);
+    this.swi = new GameBoyAdvanceSWI(this);
+    this.dynarec = new DynarecBranchListenerCore(this);
 	this.instructionHandle = this.ARM;
 }
 GameBoyAdvanceCPU.prototype.initializeRegisters = function () {
 	/*
-		R0-R7 Are known as the low registers.
-		R8-R12 Are the high registers.
-		R13 is the stack pointer.
-		R14 is the link register.
-		R15 is the program counter.
-		CPSR is the program status register.
-		SPSR is the saved program status register.
-	*/
+     R0-R7 Are known as the low registers.
+     R8-R12 Are the high registers.
+     R13 is the stack pointer.
+     R14 is the link register.
+     R15 is the program counter.
+     CPSR is the program status register.
+     SPSR is the saved program status register.
+     */
 	//Normal R0-R15 Registers:
-	this.registers = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+	this.registers = getInt32Array(16);
 	//Used to copy back the R8-R14 state for normal operations:
-	this.registersUSR = [0,0,0,0,0,0,0];
+	this.registersUSR = getInt32Array(7);
 	//Fast IRQ mode registers (R8-R14):
-	this.registersFIQ = [0,0,0,0,0,0,0];
+	this.registersFIQ = getInt32Array(7);
 	//Supervisor mode registers (R13-R14):
-	this.registersSVC = [0,0];
+	this.registersSVC = getInt32Array(2);
 	//Abort mode registers (R13-R14):
-	this.registersABT = [0,0];
+	this.registersABT = getInt32Array(2);
 	//IRQ mode registers (R13-R14):
-	this.registersIRQ = [0,0];
+	this.registersIRQ = getInt32Array(2);
 	//Undefined mode registers (R13-R14):
-	this.registersUND = [0,0];
-	//Pre-initialize stack pointers if no BIOS loaded:
-	if (!this.IOCore.BIOSFound || this.IOCore.emulatorCore.SKIPBoot) {
-		this.registersSVC[0] = 0x3007FE0;
-		this.registersIRQ[0] = 0x3007FA0;
-		this.registers[13] = 0x3007F00;
-		this.registers[15] = 0x8000000;
-	}
+	this.registersUND = getInt32Array(2);
 	//CPSR Register:
 	this.CPSRNegative = false;		//N Bit
 	this.CPSRZero = false;			//Z Bit
@@ -75,6 +73,14 @@ GameBoyAdvanceCPU.prototype.initializeRegisters = function () {
 	this.SPSRUND = [false, false, false, false, true, true, false, 0x13];	//Undefined
 	this.triggeredIRQ = false;		//Pending IRQ found.
 	this.pipelineInvalid = 0x4;		//Mark pipeline as invalid.
+    //Pre-initialize stack pointers if no BIOS loaded:
+	if (!this.IOCore.BIOSFound || this.IOCore.emulatorCore.SKIPBoot) {
+		this.registersSVC[0] = 0x3007FE0;
+		this.registersIRQ[0] = 0x3007FA0;
+		this.registers[13] = 0x3007F00;
+		this.registers[15] = 0x8000000;
+        this.MODEBits = 0x1F;
+	}
 }
 GameBoyAdvanceCPU.prototype.executeIteration = function () {
 	//Check for pending IRQ:
@@ -84,30 +90,35 @@ GameBoyAdvanceCPU.prototype.executeIteration = function () {
 	//Tick the pipeline of the selected instruction set:
 	this.instructionHandle.executeIteration();
 	//Increment the program counter if we didn't just branch:
-	if (this.pipelineInvalid < 0x4) {
+	if ((this.pipelineInvalid | 0) < 0x4) {
 		this.instructionHandle.incrementProgramCounter();
 	}
-	debug_end_unit();
+    debug_end_unit();
 }
 GameBoyAdvanceCPU.prototype.branch = function (branchTo) {
-	if (branchTo > 0x3FFF || this.IOCore.BIOSFound) {
-		//Branch to new address:
-		this.registers[15] = branchTo;
+	branchTo = branchTo | 0;
+    if (branchTo > 0x3FFF || this.IOCore.BIOSFound) {
+		//Tell the JIT information on the state before branch:
+        if (this.emulatorCore.dynarecEnabled) {
+            this.dynarec.listen(this.registers[15] | 0, branchTo | 0, this.InTHUMB, this.MODEBits | 0);
+        }
+        //Branch to new address:
+		this.registers[15] = branchTo | 0;
 		//Mark pipeline as invalid:
 		this.pipelineInvalid = 0x4;
 		//Next PC fetch has to update the address bus:
 		this.wait.NonSequentialBroadcast();
-		debug_branch(branchTo);
+        debug_branch(branchTo);
 	}
 	else {
 		//We're branching into BIOS, handle specially:
 		switch (branchTo) {
-			//IRQ mode exit handling:
+                //IRQ mode exit handling:
 			case 0x130:
 				this.ARM.execute = 0xE8BD500F;
-				this.ARM.LDMIAW(this, this.ARM.guardMultiRegisterWrite);
+				this.ARM.LDMIAW(this.ARM, this.ARM.guardRegisterWriteLDM);
 				this.ARM.execute = 0xE25EF004;
-				this.ARM.SUBS(this, this.ARM.imm);
+				this.ARM.SUBS(this.ARM, this.ARM.imm);
 				break;
 			default:
 				throw(new Error("Could not handle branch to: " + branchTo.toString(16)));
@@ -120,7 +131,7 @@ GameBoyAdvanceCPU.prototype.checkPendingIRQ = function () {
 			//Clear our Pending IRQ acknowledge:
 			this.IOCore.irq.checkForIRQFire();
 			//Branch for IRQ now:
-			this.IRQ(this.instructionHandle.getLR());
+			this.IRQ();
 		}
 	}
 }
@@ -138,7 +149,19 @@ GameBoyAdvanceCPU.prototype.enterTHUMB = function () {
 }
 GameBoyAdvanceCPU.prototype.getLR = function () {
 	//Get the previous instruction address:
-	return this.instructionHandle.getLR();
+	return this.instructionHandle.getLR() | 0;
+}
+GameBoyAdvanceCPU.prototype.getIRQLR = function () {
+	//Get the previous instruction address:
+	var lr = this.instructionHandle.getIRQLR();
+    var modeOffset = (this.InTHUMB) ? 2 : 4;
+    if (this.pipelineInvalid > 1) {
+        while (this.pipelineInvalid > 1) {
+            lr = (lr + modeOffset) | 0;
+            this.pipelineInvalid >>= 1;
+        }
+    }
+    return lr | 0;
 }
 GameBoyAdvanceCPU.prototype.THUMBBitModify = function (isThumb) {
 	this.InTHUMB = isThumb;
@@ -154,15 +177,15 @@ GameBoyAdvanceCPU.prototype.IRQ = function () {
 		//Mode bits are set to IRQ:
 		this.switchMode(0x12);
 		//Save link register:
-		this.registers[14] = this.instructionHandle.getIRQLR();
-		debug_register(14, this.registers[14]);
+		this.registers[14] = this.getIRQLR() | 0;
+        debug_register(14, this.registers[14]);
 		//Disable IRQ:
 		this.IRQDisabled = true;
 		if (this.IOCore.BIOSFound) {
-			//IRQ exception vector:
+            //Exception always enter ARM mode:
+            this.enterARM();
+            //IRQ exception vector:
 			this.branch(0x18);
-			//Exception always enter ARM mode:
-			this.enterARM();
 		}
 		else {
 			//Exception always enter ARM mode:
@@ -173,7 +196,7 @@ GameBoyAdvanceCPU.prototype.IRQ = function () {
 			//Save link register:
 			this.registers[14] = 0x130;
 			//Skip BIOS ROM processing:
-			this.branch(0x3FFFFFC);
+			this.branch(this.read32(0x3FFFFFC) & -0x4);
 		}
 	}
 }
@@ -182,14 +205,14 @@ GameBoyAdvanceCPU.prototype.SWI = function () {
 		//Mode bits are set to SWI:
 		this.switchMode(0x13);
 		//Save link register:
-		this.registers[14] = this.getLR();
-		debug_register(14, this.registers[14]);
-		//SWI exception vector:
-		this.branch(0x8);
+		this.registers[14] = this.getLR() | 0;
+        debug_register(14, this.registers[14]);
 		//Disable IRQ:
 		this.IRQDisabled = true;
-		//Exception always enter ARM mode:
+        //Exception always enter ARM mode:
 		this.enterARM();
+        //SWI exception vector:
+		this.branch(0x8);
 	}
 	else {
 		//HLE the SWI command:
@@ -202,23 +225,19 @@ GameBoyAdvanceCPU.prototype.UNDEFINED = function () {
 		//Mode bits are set to SWI:
 		this.switchMode(0x1B);
 		//Save link register:
-		this.registers[14] = this.getLR();
-		debug_register(14, this.registers[14]);
-		//SWI exception vector:
-		this.branch(0x4);
+		this.registers[14] = this.getLR() | 0;
+        debug_register(14, this.registers[14]);
 		//Disable IRQ:
 		this.IRQDisabled = true;
-		//Exception always enter ARM mode:
+        //Exception always enter ARM mode:
 		this.enterARM();
+        //Undefined exception vector:
+		this.branch(0x4);
 	}
-	throw("Debugger caught an undefined instruction.");
 }
 GameBoyAdvanceCPU.prototype.SPSRtoCPSR = function () {
 	//Used for leaving an exception and returning to the previous state:
-	switch (this.MODEBits) {
-		case 0x10:	//User
-		case 0x1F:	//System
-			return;
+	switch (this.MODEBits | 0) {
 		case 0x11:	//FIQ
 			var spsr = this.SPSRFIQ;
 			break;
@@ -233,6 +252,9 @@ GameBoyAdvanceCPU.prototype.SPSRtoCPSR = function () {
 			break;
 		case 0x1B:	//Undefined
 			var spsr = this.SPSRUND;
+            break;
+        default:
+            return;
 	}
 	this.CPSRNegative = spsr[0];
 	this.CPSRZero = spsr[1];
@@ -244,12 +266,13 @@ GameBoyAdvanceCPU.prototype.SPSRtoCPSR = function () {
 	this.switchRegisterBank(spsr[7]);
 }
 GameBoyAdvanceCPU.prototype.switchMode = function (newMode) {
-	this.CPSRtoSPSR(newMode);
-	this.switchRegisterBank(newMode);
+	newMode = newMode | 0;
+    this.CPSRtoSPSR(newMode | 0);
+	this.switchRegisterBank(newMode | 0);
 }
 GameBoyAdvanceCPU.prototype.CPSRtoSPSR = function (newMode) {
 	//Used for leaving an exception and returning to the previous state:
-	switch (newMode) {
+	switch (newMode | 0) {
 		case 0x11:	//FIQ
 			var spsr = this.SPSRFIQ;
 			break;
@@ -275,14 +298,20 @@ GameBoyAdvanceCPU.prototype.CPSRtoSPSR = function (newMode) {
 	spsr[5] = this.FIQDisabled;
 	spsr[6] = this.InTHUMB;
 	spsr[7] = this.MODEBits;
-	debug_spsr(spsr);
+    debug_spsr(spsr);
 }
 GameBoyAdvanceCPU.prototype.switchRegisterBank = function (newMode) {
-	switch (this.MODEBits) {
+	newMode = newMode | 0;
+    switch (this.MODEBits | 0) {
 		case 0x10:
 		case 0x1F:
-			this.registersUSR[0] = this.registers[13];
-			this.registersUSR[1] = this.registers[14];
+			this.registersUSR[0] = this.registers[8];
+			this.registersUSR[1] = this.registers[9];
+			this.registersUSR[2] = this.registers[10];
+			this.registersUSR[3] = this.registers[11];
+			this.registersUSR[4] = this.registers[12];
+			this.registersUSR[5] = this.registers[13];
+			this.registersUSR[6] = this.registers[14];
 			break;
 		case 0x11:
 			this.registersFIQ[0] = this.registers[8];
@@ -294,26 +323,51 @@ GameBoyAdvanceCPU.prototype.switchRegisterBank = function (newMode) {
 			this.registersFIQ[6] = this.registers[14];
 			break;
 		case 0x12:
-			this.registersIRQ[0] = this.registers[13];
+			this.registersUSR[0] = this.registers[8];
+			this.registersUSR[1] = this.registers[9];
+			this.registersUSR[2] = this.registers[10];
+			this.registersUSR[3] = this.registers[11];
+			this.registersUSR[4] = this.registers[12];
+            this.registersIRQ[0] = this.registers[13];
 			this.registersIRQ[1] = this.registers[14];
 			break;
 		case 0x13:
-			this.registersSVC[0] = this.registers[13];
+			this.registersUSR[0] = this.registers[8];
+			this.registersUSR[1] = this.registers[9];
+			this.registersUSR[2] = this.registers[10];
+			this.registersUSR[3] = this.registers[11];
+			this.registersUSR[4] = this.registers[12];
+            this.registersSVC[0] = this.registers[13];
 			this.registersSVC[1] = this.registers[14];
 			break;
 		case 0x17:
-			this.registersABT[0] = this.registers[13];
+			this.registersUSR[0] = this.registers[8];
+			this.registersUSR[1] = this.registers[9];
+			this.registersUSR[2] = this.registers[10];
+			this.registersUSR[3] = this.registers[11];
+			this.registersUSR[4] = this.registers[12];
+            this.registersABT[0] = this.registers[13];
 			this.registersABT[1] = this.registers[14];
 			break;
 		case 0x1B:
-			this.registersUND[0] = this.registers[13];
+			this.registersUSR[0] = this.registers[8];
+			this.registersUSR[1] = this.registers[9];
+			this.registersUSR[2] = this.registers[10];
+			this.registersUSR[3] = this.registers[11];
+			this.registersUSR[4] = this.registers[12];
+            this.registersUND[0] = this.registers[13];
 			this.registersUND[1] = this.registers[14];
 	}
-	switch (newMode) {
+	switch (newMode | 0) {
 		case 0x10:
 		case 0x1F:
-			this.registers[13] = this.registersUSR[0];
-			this.registers[14] = this.registersUSR[1];
+            this.registers[8] = this.registersUSR[0];
+			this.registers[9] = this.registersUSR[1];
+			this.registers[10] = this.registersUSR[2];
+			this.registers[11] = this.registersUSR[3];
+			this.registers[12] = this.registersUSR[4];
+			this.registers[13] = this.registersUSR[5];
+			this.registers[14] = this.registersUSR[6];
 			break;
 		case 0x11:
 			this.registers[8] = this.registersFIQ[0];
@@ -325,116 +379,229 @@ GameBoyAdvanceCPU.prototype.switchRegisterBank = function (newMode) {
 			this.registers[14] = this.registersFIQ[6];
 			break;
 		case 0x12:
-			this.registers[13] = this.registersIRQ[0];
+			this.registers[8] = this.registersUSR[0];
+			this.registers[9] = this.registersUSR[1];
+			this.registers[10] = this.registersUSR[2];
+			this.registers[11] = this.registersUSR[3];
+			this.registers[12] = this.registersUSR[4];
+            this.registers[13] = this.registersIRQ[0];
 			this.registers[14] = this.registersIRQ[1];
 			break;
 		case 0x13:
-			this.registers[13] = this.registersSVC[0];
+			this.registers[8] = this.registersUSR[0];
+			this.registers[9] = this.registersUSR[1];
+			this.registers[10] = this.registersUSR[2];
+			this.registers[11] = this.registersUSR[3];
+			this.registers[12] = this.registersUSR[4];
+            this.registers[13] = this.registersSVC[0];
 			this.registers[14] = this.registersSVC[1];
 			break;
 		case 0x17:
-			this.registers[13] = this.registersABT[0];
+			this.registers[8] = this.registersUSR[0];
+			this.registers[9] = this.registersUSR[1];
+			this.registers[10] = this.registersUSR[2];
+			this.registers[11] = this.registersUSR[3];
+			this.registers[12] = this.registersUSR[4];
+            this.registers[13] = this.registersABT[0];
 			this.registers[14] = this.registersABT[1];
 			break;
 		case 0x1B:
-			this.registers[13] = this.registersUND[0];
+			this.registers[8] = this.registersUSR[0];
+			this.registers[9] = this.registersUSR[1];
+			this.registers[10] = this.registersUSR[2];
+			this.registers[11] = this.registersUSR[3];
+			this.registers[12] = this.registersUSR[4];
+            this.registers[13] = this.registersUND[0];
 			this.registers[14] = this.registersUND[1];
 	}
-	this.MODEBits = newMode;
-	debug_exception(this.MODEBits);
+	this.MODEBits = newMode | 0;
+    debug_exception(this.MODEBits);
+}
+GameBoyAdvanceCPU.prototype.setADDFlags = function (operand1, operand2) {
+    //Update flags for an addition operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 + operand2;
+    var result = unsignedResult | 0;
+    this.setVFlagForADD(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult > 0xFFFFFFFF);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+    return result | 0;
+}
+GameBoyAdvanceCPU.prototype.setADCFlags = function (operand1, operand2) {
+    //Update flags for an addition operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 + operand2 + ((this.CPSRCarry) ? 1 : 0);
+    var result = unsignedResult | 0;
+    this.setVFlagForADD(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult > 0xFFFFFFFF);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+    return result | 0;
+}
+GameBoyAdvanceCPU.prototype.setSUBFlags = function (operand1, operand2) {
+    //Update flags for a subtraction operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 - operand2;
+    var result = unsignedResult | 0;
+    this.setVFlagForSUB(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult >= 0);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+    return result | 0;
+}
+GameBoyAdvanceCPU.prototype.setSBCFlags = function (operand1, operand2) {
+    //Update flags for a subtraction operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 - operand2 - ((this.CPSRCarry) ? 0 : 1);
+    var result = unsignedResult | 0;
+    this.setVFlagForSUB(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult >= 0);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+    return result | 0;
+}
+GameBoyAdvanceCPU.prototype.setCMPFlags = function (operand1, operand2) {
+    //Update flags for a subtraction operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 - operand2;
+    var result = unsignedResult | 0;
+    this.setVFlagForSUB(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult >= 0);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+}
+GameBoyAdvanceCPU.prototype.setCMNFlags = function (operand1, operand2) {
+    //Update flags for an addition operation:
+    operand1 >>>= 0;
+    operand2 >>>= 0;
+    var unsignedResult = operand1 + operand2;
+    var result = unsignedResult | 0;
+    this.setVFlagForADD(operand1 | 0, operand2 | 0, result | 0);
+	this.CPSRCarry = (unsignedResult > 0xFFFFFFFF);
+	this.CPSRNegative = (result < 0);
+	this.CPSRZero = (result == 0);
+}
+GameBoyAdvanceCPU.prototype.setVFlagForADD = function (operand1, operand2, result) {
+    operand1 = operand1 | 0;
+    operand2 = operand2 | 0;
+    result = result | 0;
+    this.CPSROverflow = ((operand1 ^ operand2) >= 0 && (operand1 ^ result) < 0);
+}
+GameBoyAdvanceCPU.prototype.setVFlagForSUB = function (operand1, operand2, result) {
+    operand1 = operand1 | 0;
+    operand2 = operand2 | 0;
+    result = result | 0;
+    this.CPSROverflow = ((operand1 ^ operand2) < 0 && (operand1 ^ result) < 0);
 }
 GameBoyAdvanceCPU.prototype.performMUL32 = function (rs, rd, MLAClocks) {
-	//Predict the internal cycle time:
+	rs = rs | 0;
+    rd = rd | 0;
+    MLAClocks = MLAClocks | 0;
+    //Predict the internal cycle time:
 	if ((rd >>> 8) == 0 || (rd >>> 8) == 0xFFFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 1 + MLAClocks);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, (1 + (MLAClocks | 0)) | 0);
 	}
 	else if ((rd >>> 16) == 0 || (rd >>> 16) == 0xFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 2 + MLAClocks);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, (2 + (MLAClocks | 0)) | 0);
 	}
 	else if ((rd >>> 24) == 0 || (rd >>> 24) == 0xFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 3 + MLAClocks);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, (3 + (MLAClocks | 0)) | 0);
 	}
 	else {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 4 + MLAClocks);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, (4 + (MLAClocks | 0)) | 0);
 	}
 	/*
-		We have to split up the 32 bit multiplication,
-		as JavaScript does multiplication on the FPU
-		as double floats, which drops the low bits
-		rather than the high bits.
-	*/
+     We have to split up the 32 bit multiplication,
+     as JavaScript does multiplication on the FPU
+     as double floats, which drops the low bits
+     rather than the high bits.
+     */
 	var lowMul = (rs & 0xFFFF) * rd;
 	var highMul = (rs >> 16) * rd;
 	//Cut off bits above bit 31 and return with proper sign:
 	return ((highMul << 16) + lowMul) | 0;
 }
 GameBoyAdvanceCPU.prototype.performMUL64 = function (rs, rd) {
-	//Predict the internal cycle time:
+	rs = rs | 0;
+    rd = rd | 0;
+    //Predict the internal cycle time:
 	if ((rd >>> 8) == 0 || (rd >>> 8) == 0xFFFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 2);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 2);
 	}
 	else if ((rd >>> 16) == 0 || (rd >>> 16) == 0xFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 3);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 3);
 	}
 	else if ((rd >>> 24) == 0 || (rd >>> 24) == 0xFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 4);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 4);
 	}
 	else {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 5);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 5);
 	}
 	//Solve for the high word (Do FPU double divide to bring down high word into the low word):
 	this.mul64ResultHigh = ((rs * rd) / 0x100000000) | 0;
 	/*
-		We have to split up the 32 bit multiplication,
-		as JavaScript does multiplication on the FPU
-		as double floats, which drops the low bits
-		rather than the high bits.
-	*/
+     We have to split up the 32 bit multiplication,
+     as JavaScript does multiplication on the FPU
+     as double floats, which drops the low bits
+     rather than the high bits.
+     */
 	var lowMul = (rs & 0xFFFF) * rd;
 	var highMul = (rs >> 16) * rd;
 	//Cut off bits above bit 31 and return with proper sign:
 	this.mul64ResultLow = ((highMul << 16) + lowMul) | 0;
 }
 GameBoyAdvanceCPU.prototype.performMLA64 = function (rs, rd, mlaHigh, mlaLow) {
-	//Predict the internal cycle time:
+	rs = rs | 0;
+    rd = rd | 0;
+    mlaHigh = mlaHigh | 0;
+    mlaLow = mlaLow | 0;
+    //Predict the internal cycle time:
 	if ((rd >>> 8) == 0 || (rd >>> 8) == 0xFFFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 3);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 3);
 	}
 	else if ((rd >>> 16) == 0 || (rd >>> 16) == 0xFFFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 4);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 4);
 	}
 	else if ((rd >>> 24) == 0 || (rd >>> 24) == 0xFF) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 5);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 5);
 	}
 	else {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 6);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 6);
 	}
 	//Solve for the high word (Do FPU double divide to bring down high word into the low word):
-	this.mul64ResultHigh = ((((rs * rd) + mlaLow) / 0x100000000) + mlaHigh) | 0;
+	this.mul64ResultHigh = ((((rs * rd) + (mlaLow >>> 0)) / 0x100000000) + (mlaHigh >>> 0)) | 0;
 	/*
-		We have to split up the 32 bit multiplication,
-		as JavaScript does multiplication on the FPU
-		as double floats, which drops the low bits
-		rather than the high bits.
-	*/
+     We have to split up the 32 bit multiplication,
+     as JavaScript does multiplication on the FPU
+     as double floats, which drops the low bits
+     rather than the high bits.
+     */
 	var lowMul = (rs & 0xFFFF) * rd;
 	var highMul = (rs >> 16) * rd;
 	//Cut off bits above bit 31 and return with proper sign:
-	this.mul64ResultLow = ((highMul << 16) + lowMul + mlaLow) | 0;
+	this.mul64ResultLow = (((highMul << 16) >>> 0) + (lowMul >>> 0) + (mlaLow >>> 0)) | 0;
 }
 GameBoyAdvanceCPU.prototype.performUMUL64 = function (rs, rd) {
-	//Predict the internal cycle time:
+	rs = rs | 0;
+    rd = rd | 0;
+    //Predict the internal cycle time:
 	if ((rd >>> 8) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 2);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 2);
 	}
 	else if ((rd >>> 16) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 3);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 3);
 	}
 	else if ((rd >>> 24) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 4);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 4);
 	}
 	else {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 5);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 5);
 	}
 	//Type convert to uint32:
 	rs >>>= 0;
@@ -442,29 +609,33 @@ GameBoyAdvanceCPU.prototype.performUMUL64 = function (rs, rd) {
 	//Solve for the high word (Do FPU double divide to bring down high word into the low word):
 	this.mul64ResultHigh = ((rs * rd) / 0x100000000) | 0;
 	/*
-		We have to split up the 32 bit multiplication,
-		as JavaScript does multiplication on the FPU
-		as double floats, which drops the low bits
-		rather than the high bits.
-	*/
+     We have to split up the 32 bit multiplication,
+     as JavaScript does multiplication on the FPU
+     as double floats, which drops the low bits
+     rather than the high bits.
+     */
 	var lowMul = (rs & 0xFFFF) * rd;
 	var highMul = (rs >> 16) * rd;
 	//Cut off bits above bit 31 and return with proper sign:
 	this.mul64ResultLow = ((highMul << 16) + lowMul) | 0;
 }
 GameBoyAdvanceCPU.prototype.performUMLA64 = function (rs, rd, mlaHigh, mlaLow) {
-	//Predict the internal cycle time:
+	rs = rs | 0;
+    rd = rd | 0;
+    mlaHigh = mlaHigh | 0;
+    mlaLow = mlaLow | 0;
+    //Predict the internal cycle time:
 	if ((rd >>> 8) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 3);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 3);
 	}
 	else if ((rd >>> 16) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 4);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 4);
 	}
 	else if ((rd >>> 24) == 0) {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 5);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 5);
 	}
 	else {
-		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch, 6);
+		this.IOCore.wait.CPUInternalCyclePrefetch(this.instructionHandle.fetch | 0, 6);
 	}
 	//Type convert to uint32:
 	rs >>>= 0;
@@ -472,58 +643,68 @@ GameBoyAdvanceCPU.prototype.performUMLA64 = function (rs, rd, mlaHigh, mlaLow) {
 	//Solve for the high word (Do FPU double divide to bring down high word into the low word):
 	this.mul64ResultHigh = ((((rs * rd) + mlaLow) / 0x100000000) + mlaHigh) | 0;
 	/*
-		We have to split up the 32 bit multiplication,
-		as JavaScript does multiplication on the FPU
-		as double floats, which drops the low bits
-		rather than the high bits.
-	*/
+     We have to split up the 32 bit multiplication,
+     as JavaScript does multiplication on the FPU
+     as double floats, which drops the low bits
+     rather than the high bits.
+     */
 	var lowMul = (rs & 0xFFFF) * rd;
 	var highMul = (rs >> 16) * rd;
 	//Cut off bits above bit 31 and return with proper sign:
 	this.mul64ResultLow = ((highMul << 16) + lowMul + mlaLow) | 0;
 }
 GameBoyAdvanceCPU.prototype.write32 = function (address, data) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    data = data | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	this.IOCore.memoryWrite32(address, data);
+	this.memory.memoryWriteFast32((address & -4) >>> 0, data | 0);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
 }
 GameBoyAdvanceCPU.prototype.write16 = function (address, data) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    data = data | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	this.IOCore.memoryWrite16(address, data);
+	this.memory.memoryWriteFast16((address & -2) >>> 0, data | 0);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
 }
 GameBoyAdvanceCPU.prototype.write8 = function (address, data) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    data = data | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	this.IOCore.memoryWrite8(address, data);
+	this.memory.memoryWrite8(address >>> 0, data | 0);
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
 }
 GameBoyAdvanceCPU.prototype.read32 = function (address) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	var data = this.IOCore.memoryRead32(address);
+	var data = this.memory.memoryReadFast32((address & -4) >>> 0) | 0;
+    var real_output = ((address & 0x3) == 0) ? data : ((data << ((4 - (address & 0x3)) << 3)) | (data >>> ((address & 0x3) << 3)));
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	return data;
+	return real_output | 0;
 }
 GameBoyAdvanceCPU.prototype.read16 = function (address) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	var data = this.IOCore.memoryRead16(address);
+	var data = this.memory.memoryReadFast16((address & -2) >>> 0) | 0;
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	return data;
+	return data | 0;
 }
 GameBoyAdvanceCPU.prototype.read8 = function (address) {
-	//Updating the address bus away from PC fetch:
+	address = address | 0;
+    //Updating the address bus away from PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	var data = this.IOCore.memoryRead8(address);
+	var data = this.memory.memoryRead8(address >>> 0) | 0;
 	//Updating the address bus back to PC fetch:
 	this.IOCore.wait.NonSequentialBroadcast();
-	return data;
+	return data | 0;
 }

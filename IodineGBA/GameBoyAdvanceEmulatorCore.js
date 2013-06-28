@@ -1,7 +1,8 @@
-/* 
+"use strict";
+/*
  * This file is part of IodineGBA
  *
- * Copyright (C) 2012 Grant Galitz
+ * Copyright (C) 2012-2013 Grant Galitz
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,16 +17,19 @@
  */
 function GameBoyAdvanceEmulator() {
 	this.SKIPBoot = true;					//Skip the BIOS boot screen.
+    this.dynarecEnabled = false;            //Use the dynarec engine?
+    this.dynarecTHUMB = true;               //Enable THUMB compiling.
+    this.dynarecARM = false;                //Enable ARM compiling.
 	this.emulatorSpeed = 1;					//Speed multiplier of the emulator.
-	this.timerIntervalRate = 4;				//How often the emulator core is called into (in milliseconds).
+	this.timerIntervalRate = 16;			//How often the emulator core is called into (in milliseconds).
 	this.graphicsFound = false;				//Do we have graphics output sink found yet?
 	this.audioFound = false;				//Do we have audio output sink found yet?
 	this.romFound = false;					//Do we have a ROM loaded in?
 	this.faultFound = false;				//Did we run into a fatal error?
 	this.paused = true;						//Are we paused?
 	this.audioVolume = 1;					//Starting audio volume.
-	this.audioBufferUnderrunLimit = 15;		//Audio buffer minimum span amount over x interpreter iterations.
-	this.audioBufferSize = 30;				//Audio buffer maximum span amount over x interpreter iterations.
+	this.audioBufferUnderrunLimit = 8;		//Audio buffer minimum span amount over x interpreter iterations.
+	this.audioBufferSize = 20;				//Audio buffer maximum span amount over x interpreter iterations.
 	this.offscreenWidth = 240;				//Width of the GBA screen.
 	this.offscreenHeight = 160;				//Height of the GBA screen.
 	this.BIOS = [];							//Initialize BIOS as not existing.
@@ -260,15 +264,15 @@ GameBoyAdvanceEmulator.prototype.graphicsBlit = function () {
 GameBoyAdvanceEmulator.prototype.enableAudio = function () {
 	if (!this.audioFound) {
 		//Calculate the variables for the preliminary downsampler first:
-		this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0xFFFF / 0x3FF)), 1);
-		this.audioDownSampleInputDivider = 0.5 / (this.audioResamplerFirstPassFactor * 0x3FF);
+		this.audioResamplerFirstPassFactor = Math.max(Math.min(Math.floor(this.clocksPerSecond / 44100), Math.floor(0x7FFFFFFF / 0x3FF)), 1);
+		this.audioDownSampleInputDivider = (2 / 0x3FF) / this.audioResamplerFirstPassFactor;
 		this.audioSetState(true);	//Set audio to 'found' by default.
 		//Attempt to enable audio:
 		var parentObj = this;
 		this.audio = new XAudioServer(2, this.clocksPerSecond / this.audioResamplerFirstPassFactor, 0, Math.max(this.CPUCyclesPerIteration * this.audioBufferSize / this.audioResamplerFirstPassFactor, 8192) << 1, null, this.audioVolume, function () {
-			//Disable audio in the callback here:
-			parentObj.disableAudio();
-		});
+                                      //Disable audio in the callback here:
+                                      parentObj.disableAudio();
+                                      });
 		if (this.audioFound) {
 			//Only run this if audio was found to save memory on disabled output:
 			this.initializeAudioBuffering();
@@ -293,9 +297,11 @@ GameBoyAdvanceEmulator.prototype.changeVolume = function (newVolume) {
 		this.audio.changeVolume(this.audioVolume);
 	}
 }
-GameBoyAdvanceEmulator.prototype.outputAudio = function (downsampleInput) {
-	this.audioBuffer[this.audioDestinationPosition++] = (downsampleInput >>> 16) * this.audioDownSampleInputDivider - 1;
-	this.audioBuffer[this.audioDestinationPosition++] = (downsampleInput & 0xFFFF) * this.audioDownSampleInputDivider - 1;
+GameBoyAdvanceEmulator.prototype.outputAudio = function (downsampleInputLeft, downsampleInputRight) {
+	downsampleInputLeft = downsampleInputLeft | 0;
+    downsampleInputRight = downsampleInputRight | 0;
+    this.audioBuffer[this.audioDestinationPosition++] = (downsampleInputLeft * this.audioDownSampleInputDivider) - 1;
+	this.audioBuffer[this.audioDestinationPosition++] = (downsampleInputRight * this.audioDownSampleInputDivider) - 1;
 	if (this.audioDestinationPosition == this.audioNumSamplesTotal) {
 		this.audio.writeAudioNoCallback(this.audioBuffer);
 		this.audioDestinationPosition = 0;
@@ -330,4 +336,13 @@ GameBoyAdvanceEmulator.prototype.reinitializeAudio = function () {
 		this.disableAudio();
 		this.enableAudio();
 	}
+}
+GameBoyAdvanceEmulator.prototype.toggleSkipBootROM = function (skipBoot) {
+	this.SKIPBoot = !!skipBoot;
+    if (this.romFound && this.paused) {
+        this.initializeCore();
+    }
+}
+GameBoyAdvanceEmulator.prototype.toggleDynarec = function (dynarecEnabled) {
+	this.dynarecEnabled = !!dynarecEnabled;
 }
